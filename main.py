@@ -5,15 +5,11 @@ import os, sys
 import boto3
 from io import StringIO
 import datetime as dt
-import decimal
 from dotenv import load_dotenv
 import requests
 from dydx3 import Client
-from dydx3.constants import MARKET_ETH_USD
 import pandas as pd
 import concurrent.futures
-from itertools import repeat
-
 
 # =============================================================================
 # FILE IMPORTS
@@ -55,7 +51,7 @@ def main(exchanges_obj: dict):  # exchanges = { 'DYDX': 'BTC-USD' }
 # =============================================================================
 # Get data and store in dict
 # =============================================================================
-def get_current_data_from_exchanges(exchanges_obj: dict) -> dict:
+def get_current_data_from_exchanges(exchanges_obj: dict) -> list:
     bid_ask = []
     with concurrent.futures.ThreadPoolExecutor() as executor:
         result = executor.map(get_data_from_specific_exchange, exchanges_obj.items())
@@ -67,7 +63,7 @@ def get_current_data_from_exchanges(exchanges_obj: dict) -> dict:
 # =============================================================================
 # Determine the exchange and run function
 # =============================================================================
-def get_data_from_specific_exchange(exchange_market: tuple):
+def get_data_from_specific_exchange(exchange_market: tuple) -> dict:
     exchange, market = exchange_market[0], exchange_market[1]
     if exchange == "FTX.US":
         return get_bid_ask_ftx(market)
@@ -80,7 +76,7 @@ def get_data_from_specific_exchange(exchange_market: tuple):
 # =============================================================================
 # Get market data for Ftx.US
 # =============================================================================
-def get_bid_ask_ftx(market):
+def get_bid_ask_ftx(market: str) -> dict:
     response = requests.get(f"https://ftx.us/api/markets/{market}").json()
     response = response["result"]
     ask, bid = response["ask"], response["bid"]
@@ -90,14 +86,18 @@ def get_bid_ask_ftx(market):
 # =============================================================================
 # Get market data for DyDx
 # =============================================================================
-def get_bid_ask_dydx(market):
+def get_bid_ask_dydx(market: str) -> dict:
     client = Client(host="https://api.dydx.exchange")
-    response = client.public.get_orderbook(market=market).data
-    print(
-        "Warning: Not iterating over list to find best bid/ask. Instead, just taking the first bid/ask."
-    )
-    ask = float(response["asks"][0]["price"])
-    bid = float(response["bids"][0]["price"])
+    res = client.public.get_orderbook(market=market).data
+
+    ask = min([float(v["price"]) for v in res["asks"]])
+    bid = max([float(v["price"]) for v in res["bids"]])
+
+    # Checking validity, since we need to determine spread ourselves
+    if ask != float(res["asks"][0]["price"]):
+        raise Exception("Error determining ask price.")
+    if bid != float(res["bids"][0]["price"]):
+        raise Exception("Error determining bis price.")
 
     return {"exchange": "DYDX", "ask": ask, "bid": bid, "timestamp": TIMESTAMP}
 
@@ -118,7 +118,7 @@ def get_s3_filepaths(exchanges_obj: dict) -> dict:
 # =============================================================================
 # Get the CSV files with current data from S3
 # =============================================================================
-def get_csv_files_from_s3(s3_paths: dict):
+def get_csv_files_from_s3(s3_paths: dict) -> dict:
     df_obj = {}
     for exchange, path in s3_paths.items():
         res = s3.get_object(Bucket=BUCKET_NAME, Key=path)
@@ -137,6 +137,7 @@ def append_bid_ask_data_to_df(bid_ask: list, df_obj: dict) -> dict:
         new_row = pd.DataFrame([bd])
         df = pd.concat([df, pd.DataFrame([bd])], ignore_index=True)
         df = df.set_index("timestamp")
+        df.index = pd.to_datetime(df.index)
         df_obj[exchange] = df
     return df_obj
 
@@ -144,13 +145,10 @@ def append_bid_ask_data_to_df(bid_ask: list, df_obj: dict) -> dict:
 # =============================================================================
 # Save the updated df to S3
 # =============================================================================
-def save_updated_data_to_s3(s3_paths, df_obj):
+def save_updated_data_to_s3(s3_paths: dict, df_obj: dict) -> None:
     for exchange, path in s3_paths.items():
         df = df_obj[exchange]
-        print("###############\n\n")
         print(df)
-        print("\n\n###############\n\n")
-
         csv_buffer = StringIO()
         df.to_csv(csv_buffer)
         response = s3.put_object(
