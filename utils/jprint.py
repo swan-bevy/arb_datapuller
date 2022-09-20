@@ -2,7 +2,10 @@ from pprint import pprint as pp
 import pandas as pd
 
 
-def pprint_v2(*arg):
+# =============================================================================
+# PPRINT upgraded for my personal purposes
+# =============================================================================
+def jprint(*arg):
     if len(arg) == 0:
         print()
     for ar in arg:

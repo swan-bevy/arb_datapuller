@@ -18,7 +18,7 @@ from itertools import repeat
 # =============================================================================
 load_dotenv()
 sys.path.append(os.path.abspath("./utils"))
-from utils.pprint_v2 import pprint_v2 as pprint
+from utils.jprint import jprint
 
 # =============================================================================
 # AWS CONFIG
@@ -46,7 +46,7 @@ s3 = boto3.client(
 # =============================================================================
 BUCKET_NAME = "arb-live-data"
 FTX_BASEURL = "https://ftx.us/api/markets/"
-DYDX_BASEURL = "https://api.dydx.exchange"
+DYDX_BASEURL = "https://api.dydx.exchange"  # no "/" at end
 
 
 # =============================================================================
@@ -72,7 +72,7 @@ def main(exchanges_obj: dict, interval: int):
 def get_bid_ask_and_process_df(exchanges_obj: dict, df_obj: dict) -> dict:
     bid_asks = get_bid_ask_from_exchanges(exchanges_obj)
     df_obj = update_df_obj_with_new_bid_ask_data(df_obj, bid_asks)
-    pprint(df_obj)
+    jprint(df_obj)
     return df_obj
 
 
@@ -217,7 +217,7 @@ def save_updated_data_to_s3(s3_paths: dict, df_obj: dict) -> None:
         response = s3.put_object(
             Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
         )
-        pprint(response)
+        jprint(response)
 
 
 # =============================================================================
