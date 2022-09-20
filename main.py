@@ -19,7 +19,7 @@ load_dotenv()
 sys.path.append(os.path.abspath("./utils"))
 sys.path.append(os.path.abspath("./clients"))
 from clients.FtxClient import FtxClient
-from utils.pprint_v2 import pprint
+from utils.pprint_v2 import pprint_v2 as pprint
 
 # =============================================================================
 # AWS CONFIG
@@ -52,7 +52,9 @@ BUCKET_NAME = "arb-live-data"
 def main(exchanges_obj: dict, interval: int):  # exchanges = { 'DYDX': 'BTC-USD' }
     S3_PATHS = determine_s3_filepaths(exchanges_obj)  # CONSTANT
     while True:
+        # needs to come first to determine before midnight
         cur_s3_paths = update_s3_filepaths(S3_PATHS)
+        #
         df_obj = get_bid_ask_data_for_the_day(exchanges_obj, interval)
         save_updated_data_to_s3(cur_s3_paths, df_obj)
 
@@ -63,7 +65,8 @@ def main(exchanges_obj: dict, interval: int):  # exchanges = { 'DYDX': 'BTC-USD'
 def get_bid_ask_data_for_the_day(exchanges_obj: dict, interval: int):
     df_obj = {}
     midnight = determine_next_midnight()
-    # enter loop smooth time
+
+    # sleep to you enter loop at a smooth time
     sleep_to_desired_interval(interval)
     while determine_cur_utc_timestamp() < midnight:
         bid_asks = get_bid_ask_from_exchanges(exchanges_obj)
@@ -151,9 +154,8 @@ def update_df_obj_with_new_bid_ask_data(df_obj: dict, bid_asks: list) -> dict:
             df = create_new_df_with_bid_ask(bid_ask)
         else:
             df = append_existing_df_with_bid_ask(bid_ask, df_obj[exchange])
-        print(df)
-        print()
         df_obj[exchange] = df
+    pprint(df_obj)
     return df_obj
 
 
@@ -168,7 +170,6 @@ def create_new_df_with_bid_ask(bid_ask) -> pd.DataFrame:
 # Append to existing dataframe
 # =============================================================================
 def append_existing_df_with_bid_ask(bid_ask, df):
-    print("Warning, make sure that appending works properly.")
     return pd.concat([df, pd.DataFrame([bid_ask])], ignore_index=True)
 
 
