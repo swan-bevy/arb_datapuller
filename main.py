@@ -117,12 +117,11 @@ def get_bid_ask_ftx(market: str) -> dict:
     try:
         response = requests.get(f"{FTX_BASEURL}{market}").json()
         response = response["result"]
+        ask = response["ask"]
+        bid = response["bid"]
     except Exception as e:
         print(e)
         return {"ask": np.nan, "bid": np.nan}
-
-    ask = response["ask"]
-    bid = response["bid"]
     return {"ask": ask, "bid": bid}
 
 
@@ -144,7 +143,6 @@ def get_bid_ask_dydx(market: str) -> dict:
         raise Exception("Error determining ask price.")
     if bid != float(res["bids"][0]["price"]):
         raise Exception("Error determining bis price.")
-
     return {"ask": ask, "bid": bid}
 
 
@@ -254,14 +252,14 @@ def reset_for_new_day(s3_base_paths: dict) -> tuple:
 # =============================================================================
 # Generate cur datetime object
 # =============================================================================
-def determine_cur_utc_timestamp():
+def determine_cur_utc_timestamp() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
 # =============================================================================
-# Generate dt object for today at midnight
+# Generate dt str for today at midnight
 # =============================================================================
-def determine_midnight_today_str_timestamp():
+def determine_midnight_today_str_timestamp() -> str:
     cur = determine_cur_utc_timestamp()
     today = cur.replace(hour=0, minute=0, second=0, microsecond=0)
     return today.strftime("%Y-%m-%d")
@@ -270,7 +268,7 @@ def determine_midnight_today_str_timestamp():
 # =============================================================================
 # Determine next midnight
 # =============================================================================
-def determine_next_midnight():
+def determine_next_midnight() -> dt.datetime:
     now = determine_cur_utc_timestamp()
     date = now.replace(hour=0, minute=0, second=0, microsecond=0)
     midnight = date + dt.timedelta(days=1)
