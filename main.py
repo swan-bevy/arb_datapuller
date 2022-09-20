@@ -38,8 +38,7 @@ s3 = boto3.client(
 #      I determine a new timestamp variable for every exchange? Probably the same
 #      to allow easy merging of dfs later
 #   2. I use floats not decimals for mid calculation. Should be fine tho
-#   3. The way it's constructed currently, we'll always lose a minute at midnight
-#   4. Verify if df appending/concatening is correct
+#   3. Verify if df appending/concatening is correct
 # =============================================================================
 
 # =============================================================================
