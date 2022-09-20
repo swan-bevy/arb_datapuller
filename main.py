@@ -64,7 +64,7 @@ def main(exchanges_obj: dict, interval: int):
 
 
 # =============================================================================
-# Get data and store in dict
+# Get bid ask data and update dataframe obj for all exchanges
 # =============================================================================
 def get_bid_ask_and_process_df(exchanges_obj: dict, df_obj: dict) -> dict:
     bid_asks = get_bid_ask_from_exchanges(exchanges_obj)
@@ -74,7 +74,7 @@ def get_bid_ask_and_process_df(exchanges_obj: dict, df_obj: dict) -> dict:
 
 
 # =============================================================================
-# Get data and store in dict
+# Get current bid ask data from exchange using THREADDING
 # =============================================================================
 def get_bid_ask_from_exchanges(exchanges_obj: dict) -> list:
     bid_asks = []
@@ -107,9 +107,9 @@ def get_bid_ask_from_specific_exchange(exchange_and_market: tuple, now: object) 
 
 
 # =============================================================================
-# Get market data for Ftx_Us
+# Get bid/ask market data for Ftx_Us
 # =============================================================================
-def get_bid_ask_ftx(market: str, now: object) -> dict:
+def get_bid_ask_ftx(market: str) -> dict:
     response = requests.get(f"https://ftx.us/api/markets/{market}").json()
     response = response["result"]
     ask = response["ask"]
@@ -118,9 +118,9 @@ def get_bid_ask_ftx(market: str, now: object) -> dict:
 
 
 # =============================================================================
-# Get market data for DyDx
+# Get bid/ask market data for DyDx
 # =============================================================================
-def get_bid_ask_dydx(market: str, now: object) -> dict:
+def get_bid_ask_dydx(market: str) -> dict:
     client = Client(host="https://api.dydx.exchange")
     res = client.public.get_orderbook(market=market).data
 
@@ -133,14 +133,6 @@ def get_bid_ask_dydx(market: str, now: object) -> dict:
         raise Exception("Error determining bis price.")
 
     return {"ask": ask, "bid": bid}
-
-
-# =============================================================================
-# Compute mid between ask and bid_ask
-# =============================================================================
-def compute_mid(bid_ask: dict) -> float:
-    mid = (bid_ask["ask"] + bid_ask["bid"]) / 2
-    return round(mid, 3)
 
 
 # =============================================================================
@@ -172,14 +164,11 @@ def append_existing_df_with_bid_ask(bid_ask, df):
 
 
 # =============================================================================
-# Preare the final df_obj to be save to S3
+# Compute mid between ask and bid_ask
 # =============================================================================
-def prepare_df_obj_for_s3(df_obj: dict) -> dict:
-    for exchange, df in df_obj.items():
-        df = df.set_index("timestamp")
-        df.index = pd.to_datetime(df.index)
-        df_obj[exchange] = df
-    return df_obj
+def compute_mid(bid_ask: dict) -> float:
+    mid = (bid_ask["ask"] + bid_ask["bid"]) / 2
+    return round(mid, 3)
 
 
 # =============================================================================
@@ -219,6 +208,17 @@ def save_updated_data_to_s3(s3_paths: dict, df_obj: dict) -> None:
             Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
         )
         pprint(response)
+
+
+# =============================================================================
+# Preare the final df_obj to be save to S3
+# =============================================================================
+def prepare_df_obj_for_s3(df_obj: dict) -> dict:
+    for exchange, df in df_obj.items():
+        df = df.set_index("timestamp")
+        df.index = pd.to_datetime(df.index)
+        df_obj[exchange] = df
+    return df_obj
 
 
 # =============================================================================
@@ -264,12 +264,15 @@ def determine_next_midnight():
     return midnight
 
 
+# =============================================================================
+# Determines if we passed current midnight
+# =============================================================================
 def determine_if_new_day(midnight: object) -> bool:
     return determine_cur_utc_timestamp() >= midnight
 
 
 # =============================================================================
-# Sleep until top of 30 secs, minute, hour, etc
+# Sleep until top of minute, hour, etc
 # =============================================================================
 def sleep_to_desired_interval(interval: int):
     time.sleep(float(interval) - (time.time() % float(interval)))
