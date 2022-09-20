@@ -53,28 +53,23 @@ BUCKET_NAME = "arb-live-data"
 # =============================================================================
 def main(exchanges_obj: dict, interval: int):
     S3_BASE_PATHS = determine_general_s3_filepaths(exchanges_obj)  # CONSTANT
-    while True:
-        # needs to come first to determine before midnight
-        cur_s3_paths = update_s3_filepaths(S3_BASE_PATHS)
-        #
-        df_obj = get_bid_ask_data_for_the_day(exchanges_obj, interval)
-        save_updated_data_to_s3(cur_s3_paths, df_obj)
-
-
-# =============================================================================
-# Get bid ask data for the current day and create df for s3
-# =============================================================================
-def get_bid_ask_data_for_the_day(exchanges_obj: dict, interval: int):
-    df_obj = {}
-    midnight = determine_next_midnight()
-
-    # sleep to you enter loop at a smooth time
+    s3_paths, midnight, df_obj = reset_for_new_day(S3_BASE_PATHS)
     sleep_to_desired_interval(interval)
-    while determine_cur_utc_timestamp() < midnight:
-        bid_asks = get_bid_ask_from_exchanges(exchanges_obj)
-        df_obj = update_df_obj_with_new_bid_ask_data(df_obj, bid_asks)
+    while True:
+        df_obj = get_bid_ask_and_process_df(exchanges_obj, df_obj)
+        if determine_if_new_day(midnight):
+            save_updated_data_to_s3(s3_paths, df_obj)
+            s3_paths, midnight, df_obj = reset_for_new_day(S3_BASE_PATHS)
         sleep_to_desired_interval(interval)
-    df_obj = prepare_df_obj_for_s3(df_obj)
+
+
+# =============================================================================
+# Get data and store in dict
+# =============================================================================
+def get_bid_ask_and_process_df(exchanges_obj: dict, df_obj: dict) -> dict:
+    bid_asks = get_bid_ask_from_exchanges(exchanges_obj)
+    df_obj = update_df_obj_with_new_bid_ask_data(df_obj, bid_asks)
+    pprint(df_obj)
     return df_obj
 
 
@@ -159,7 +154,6 @@ def update_df_obj_with_new_bid_ask_data(df_obj: dict, bid_asks: list) -> dict:
         else:
             df = append_existing_df_with_bid_ask(bid_ask, df_obj[exchange])
         df_obj[exchange] = df
-    pprint(df_obj)
     return df_obj
 
 
@@ -216,6 +210,7 @@ def update_s3_filepaths(s3_base_paths: dict):
 # Save the updated df to S3
 # =============================================================================
 def save_updated_data_to_s3(s3_paths: dict, df_obj: dict) -> None:
+    df_obj = prepare_df_obj_for_s3(df_obj)
     for exchange, df in df_obj.items():
         path = s3_paths[exchange]
         csv_buffer = StringIO()
@@ -224,6 +219,16 @@ def save_updated_data_to_s3(s3_paths: dict, df_obj: dict) -> None:
             Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
         )
         pprint(response)
+
+
+# =============================================================================
+# Reset all values that start a new with new day
+# =============================================================================
+def reset_for_new_day(s3_base_paths: dict) -> tuple:
+    s3_paths = update_s3_filepaths(s3_base_paths)
+    midnight = determine_next_midnight()
+    df_obj = {}
+    return s3_paths, midnight, df_obj
 
 
 # =============================================================================
@@ -257,6 +262,10 @@ def determine_next_midnight():
     date = now.replace(hour=0, minute=0, second=0, microsecond=0)
     midnight = date + dt.timedelta(days=1)
     return midnight
+
+
+def determine_if_new_day(midnight: object) -> bool:
+    return determine_cur_utc_timestamp() >= midnight
 
 
 # =============================================================================
