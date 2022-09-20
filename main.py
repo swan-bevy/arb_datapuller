@@ -17,8 +17,6 @@ from itertools import repeat
 # =============================================================================
 load_dotenv()
 sys.path.append(os.path.abspath("./utils"))
-sys.path.append(os.path.abspath("./clients"))
-from clients.FtxClient import FtxClient
 from utils.pprint_v2 import pprint_v2 as pprint
 
 # =============================================================================
@@ -38,22 +36,26 @@ s3 = boto3.client(
 #   1. Should I use the same timestamp variable for both exchanges, or should
 #      I determine a new timestamp variable for every exchange? Probably the same
 #      to allow easy merging of dfs later
+#   2. I use floats not decimals for mid calculation. Should be fine tho
+#   3. The way it's constructed currently, we'll always lose a minute at midnight
+#   4. Verify if df appending/concatening is correct
 # =============================================================================
 
 # =============================================================================
 # CONSTANTS
 # =============================================================================
 BUCKET_NAME = "arb-live-data"
-# timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
 
 # =============================================================================
 # Get market data for exchanges, iterate infinitely
+# Exchanges_obj is a dict with exchange as key, and pair/market as value
+# Interval is an integer representing seconds
 # =============================================================================
-def main(exchanges_obj: dict, interval: int):  # exchanges = { 'DYDX': 'BTC-USD' }
-    S3_PATHS = determine_s3_filepaths(exchanges_obj)  # CONSTANT
+def main(exchanges_obj: dict, interval: int):
+    S3_BASE_PATHS = determine_general_s3_filepaths(exchanges_obj)  # CONSTANT
     while True:
         # needs to come first to determine before midnight
-        cur_s3_paths = update_s3_filepaths(S3_PATHS)
+        cur_s3_paths = update_s3_filepaths(S3_BASE_PATHS)
         #
         df_obj = get_bid_ask_data_for_the_day(exchanges_obj, interval)
         save_updated_data_to_s3(cur_s3_paths, df_obj)
@@ -72,6 +74,7 @@ def get_bid_ask_data_for_the_day(exchanges_obj: dict, interval: int):
         bid_asks = get_bid_ask_from_exchanges(exchanges_obj)
         df_obj = update_df_obj_with_new_bid_ask_data(df_obj, bid_asks)
         sleep_to_desired_interval(interval)
+    df_obj = prepare_df_obj_for_s3(df_obj)
     return df_obj
 
 
@@ -95,7 +98,7 @@ def get_bid_ask_from_exchanges(exchanges_obj: dict) -> list:
 # =============================================================================
 def get_bid_ask_from_specific_exchange(exchange_and_market: tuple, now: object) -> dict:
     exchange, market = exchange_and_market[0], exchange_and_market[1]
-    if exchange == "FTX.US":
+    if exchange == "FTX_US":
         bid_ask = get_bid_ask_ftx(market, now)
     elif exchange == "DYDX":
         bid_ask = get_bid_ask_dydx(market, now)
@@ -109,7 +112,7 @@ def get_bid_ask_from_specific_exchange(exchange_and_market: tuple, now: object) 
 
 
 # =============================================================================
-# Get market data for Ftx.US
+# Get market data for Ftx_Us
 # =============================================================================
 def get_bid_ask_ftx(market: str, now: object) -> dict:
     response = requests.get(f"https://ftx.us/api/markets/{market}").json()
@@ -141,7 +144,8 @@ def get_bid_ask_dydx(market: str, now: object) -> dict:
 # Compute mid between ask and bid_ask
 # =============================================================================
 def compute_mid(bid_ask: dict) -> float:
-    return (bid_ask["ask"] + bid_ask["bid"]) / 2
+    mid = (bid_ask["ask"] + bid_ask["bid"]) / 2
+    return round(mid, 3)
 
 
 # =============================================================================
@@ -174,26 +178,36 @@ def append_existing_df_with_bid_ask(bid_ask, df):
 
 
 # =============================================================================
+# Preare the final df_obj to be save to S3
+# =============================================================================
+def prepare_df_obj_for_s3(df_obj: dict) -> dict:
+    for exchange, df in df_obj.items():
+        df = df.set_index("timestamp")
+        df.index = pd.to_datetime(df.index)
+        df_obj[exchange] = df
+    return df_obj
+
+
+# =============================================================================
 # Get all relevant filepaths to fetch and save data to
 # =============================================================================
-def determine_s3_filepaths(exchanges_obj: dict) -> dict:
-    s3_paths = {}
+def determine_general_s3_filepaths(exchanges_obj: dict) -> dict:
+    s3_base_paths = {}
     for exchange, market in exchanges_obj.items():
         if "/" in market:
             market = market.replace("/", "-")
-        path = f"{exchange}/{market}"
-        s3_paths[exchange] = path
-
-    return s3_paths
+        path = f"{exchange}/{market}/{exchange}-{market}"
+        s3_base_paths[exchange] = path
+    return s3_base_paths
 
 
 # =============================================================================
 # Create filesnames for today's date (date in filename!)
 # =============================================================================
-def update_s3_filepaths(s3_paths: dict):
+def update_s3_filepaths(s3_base_paths: dict):
     updated = {}
     today = determine_midnight_today_str_timestamp()
-    for exchange, path in s3_paths.items():
+    for exchange, path in s3_base_paths.items():
         updated[exchange] = f"{path}-{today}.csv"
     return updated
 
@@ -253,5 +267,5 @@ def sleep_to_desired_interval(interval: int):
 
 
 if __name__ == "__main__":
-    exchanges_obj = {"FTX.US": "ETH/USD", "DYDX": "ETH-USD"}
+    exchanges_obj = {"FTX_US": "ETH/USD", "DYDX": "ETH-USD"}
     main(exchanges_obj=exchanges_obj, interval=5)
