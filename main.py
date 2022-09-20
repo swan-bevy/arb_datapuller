@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import requests
 from dydx3 import Client
 import pandas as pd
+import numpy as np
 import concurrent.futures
 from itertools import repeat
 
@@ -45,6 +46,9 @@ s3 = boto3.client(
 # CONSTANTS
 # =============================================================================
 BUCKET_NAME = "arb-live-data"
+FTX_BASEURL = "https://ftx.us/api/markets/"
+DYDX_BASEURL = "https://api.dydx.exchange"
+
 
 # =============================================================================
 # Get market data for exchanges, iterate infinitely
@@ -94,9 +98,9 @@ def get_bid_ask_from_exchanges(exchanges_obj: dict) -> list:
 def get_bid_ask_from_specific_exchange(exchange_and_market: tuple, now: object) -> dict:
     exchange, market = exchange_and_market[0], exchange_and_market[1]
     if exchange == "FTX_US":
-        bid_ask = get_bid_ask_ftx(market, now)
+        bid_ask = get_bid_ask_ftx(market)
     elif exchange == "DYDX":
-        bid_ask = get_bid_ask_dydx(market, now)
+        bid_ask = get_bid_ask_dydx(market)
     else:
         raise Exception("No function exists for this exchange.")
 
@@ -110,8 +114,13 @@ def get_bid_ask_from_specific_exchange(exchange_and_market: tuple, now: object) 
 # Get bid/ask market data for Ftx_Us
 # =============================================================================
 def get_bid_ask_ftx(market: str) -> dict:
-    response = requests.get(f"https://ftx.us/api/markets/{market}").json()
-    response = response["result"]
+    try:
+        response = requests.get(f"{FTX_BASEURL}{market}").json()
+        response = response["result"]
+    except Exception as e:
+        print(e)
+        return {"ask": np.nan, "bid": np.nan}
+
     ask = response["ask"]
     bid = response["bid"]
     return {"ask": ask, "bid": bid}
@@ -121,11 +130,15 @@ def get_bid_ask_ftx(market: str) -> dict:
 # Get bid/ask market data for DyDx
 # =============================================================================
 def get_bid_ask_dydx(market: str) -> dict:
-    client = Client(host="https://api.dydx.exchange")
-    res = client.public.get_orderbook(market=market).data
+    try:
+        client = Client(host=DYDX_BASEURL)
+        res = client.public.get_orderbook(market=market).data
+        ask = min([float(v["price"]) for v in res["asks"]])
+        bid = max([float(v["price"]) for v in res["bids"]])
+    except Exception as e:
+        print(e)
+        return {"ask": np.nan, "bid": np.nan}
 
-    ask = min([float(v["price"]) for v in res["asks"]])
-    bid = max([float(v["price"]) for v in res["bids"]])
     # Checking validity, since we need to determine spread ourselves
     if ask != float(res["asks"][0]["price"]):
         raise Exception("Error determining ask price.")
