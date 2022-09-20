@@ -46,7 +46,7 @@ s3 = boto3.client(
 # =============================================================================
 BUCKET_NAME = "arb-live-data"
 FTX_BASEURL = "https://ftx.us/api/markets/"
-DYDX_BASEURL = "https://api.dydx.exchange"  # no "/" at end
+DYDX_BASEURL = "https://api.dydx.exchange"  # No "/" at end!
 
 
 # =============================================================================
@@ -94,7 +94,7 @@ def get_bid_ask_from_exchanges(exchanges_obj: dict) -> list:
 # =============================================================================
 # Determine the exchange and run function
 # =============================================================================
-def get_bid_ask_from_specific_exchange(exchange_and_market: tuple, now: object) -> dict:
+def get_bid_ask_from_specific_exchange(exchange_and_market: tuple, now: dt) -> dict:
     exchange, market = exchange_and_market[0], exchange_and_market[1]
     if exchange == "FTX_US":
         bid_ask = get_bid_ask_ftx(market)
@@ -199,7 +199,7 @@ def determine_general_s3_filepaths(exchanges_obj: dict) -> dict:
 # =============================================================================
 def update_s3_filepaths(s3_base_paths: dict):
     updated = {}
-    today = determine_midnight_today_str_timestamp()
+    today = determine_today_str_timestamp()
     for exchange, path in s3_base_paths.items():
         updated[exchange] = f"{path}-{today}.csv"
     return updated
@@ -226,7 +226,7 @@ def save_updated_data_to_s3(s3_paths: dict, df_obj: dict) -> None:
 def prepare_df_obj_for_s3(df_obj: dict) -> dict:
     for exchange, df in df_obj.items():
         df = df.set_index("timestamp")
-        df.index = pd.to_datetime(df.index)
+        df.index = pd.to_datetime(df.index).tz_localize(None)
         df_obj[exchange] = df
     return df_obj
 
@@ -256,16 +256,16 @@ def determine_cur_utc_timestamp() -> dt.datetime:
 
 
 # =============================================================================
-# Generate dt str for today at midnight
+# Generate dt str for today at midnight (e.g. `2022-09-20`)
 # =============================================================================
-def determine_midnight_today_str_timestamp() -> str:
+def determine_today_str_timestamp() -> str:
     cur = determine_cur_utc_timestamp()
     today = cur.replace(hour=0, minute=0, second=0, microsecond=0)
     return today.strftime("%Y-%m-%d")
 
 
 # =============================================================================
-# Determine next midnight
+# Determine next midnight, gives datetime_object
 # =============================================================================
 def determine_next_midnight() -> dt.datetime:
     now = determine_cur_utc_timestamp()
@@ -277,7 +277,7 @@ def determine_next_midnight() -> dt.datetime:
 # =============================================================================
 # Determines if we passed current midnight
 # =============================================================================
-def determine_if_new_day(midnight: object) -> bool:
+def determine_if_new_day(midnight: dt.datetime) -> bool:
     return determine_cur_utc_timestamp() >= midnight
 
 
