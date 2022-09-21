@@ -39,7 +39,7 @@ s3 = boto3.client(
 #      to allow easy merging of dfs later
 #   2. I use floats not decimals for mid calculation. Should be fine tho
 #   3. Verify if df appending/concatening is correct
-#   4. I don't check for min ask, max bid price, I just take the first values in the list
+#   4. Error checker exception isn't thrown, since it's in try/catch
 # =============================================================================
 
 # =============================================================================
@@ -150,18 +150,14 @@ def pull_best_bid_ask_from_orderbook(res: list, exchange: str) -> tuple:
         asks = [{"price": a[0], "size": a[1]} for a in asks]
         bids = [{"price": b[0], "size": b[1]} for b in bids]
 
-    best_ask = None
+    best_ask = asks[0]
     for ask in asks:
-        if best_ask is None:
-            best_ask = ask
-        elif ask["price"] < best_ask["price"]:
+        if ask["price"] < best_ask["price"]:
             best_ask = ask
 
-    best_bid = None
+    best_bid = bids[0]
     for bid in bids:
-        if best_bid is None:
-            best_bid = bid
-        elif bid["price"] > best_bid["price"]:
+        if bid["price"] > best_bid["price"]:
             best_bid = bid
 
     bid_ask = {
@@ -170,17 +166,23 @@ def pull_best_bid_ask_from_orderbook(res: list, exchange: str) -> tuple:
         "bid_price": best_bid["price"],
         "bid_size": best_bid["size"],
     }
+    error_check_bid_ask_orderbook(bid_ask, exchange, asks, bids)
+    return bid_ask
+
+
+# =============================================================================
+# Error check the bid ask orderbook to check for irregularities
+# =============================================================================
+def error_check_bid_ask_orderbook(bid_ask: dict, exchange: str, asks: list, bids: list):
     # error checking
     if bid_ask["ask_price"] != float(asks[0]["price"]):
-        raise Exception(f"{exchange} order book messed up: \n {res}")
+        raise Exception(f"{exchange} order book messed up: \n {asks}")
     if bid_ask["bid_price"] != float(bids[0]["price"]):
-        raise Exception(f"{exchange} order book messed up: \n {res}")
+        raise Exception(f"{exchange} order book messed up: \n {bids}")
 
     diff = (bid_ask["ask_price"] / bid_ask["bid_price"] - 1) * 100
     if diff > 5:
         jprint(f"Warning, diff is larger than 5%: {diff}")
-
-    return bid_ask
 
 
 # =============================================================================
