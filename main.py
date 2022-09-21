@@ -39,6 +39,7 @@ s3 = boto3.client(
 #      to allow easy merging of dfs later
 #   2. I use floats not decimals for mid calculation. Should be fine tho
 #   3. Verify if df appending/concatening is correct
+#   4. I don't check for min ask, max bid price, I just take the first values in the list
 # =============================================================================
 
 # =============================================================================
@@ -113,36 +114,50 @@ def get_bid_ask_from_specific_exchange(exchange_and_market: tuple, now: dt) -> d
 # Get bid/ask market data for Ftx_Us
 # =============================================================================
 def get_bid_ask_ftx(market: str) -> dict:
+    bid_ask = {}
     try:
-        response = requests.get(f"{FTX_BASEURL}{market}").json()
-        response = response["result"]
-        ask = response["ask"]
-        bid = response["bid"]
+        url = f"{FTX_BASEURL}{market}/orderbook"
+        res = requests.get(url).json()
+        ask, bid = res["result"]["asks"][0], res["result"]["bids"][0]
+        bid_ask["ask_price"] = ask[0]
+        bid_ask["ask_size"] = ask[1]
+        bid_ask["bid_price"] = bid[0]
+        bid_ask["bid_size"] = bid[1]
     except Exception as e:
         print(e)
-        return {"ask": np.nan, "bid": np.nan}
-    return {"ask": ask, "bid": bid}
+        bid_ask = create_nan_bid_ask_dict()
+    return bid_ask
 
 
 # =============================================================================
 # Get bid/ask market data for DyDx
 # =============================================================================
 def get_bid_ask_dydx(market: str) -> dict:
+    bid_ask = {}
     try:
         client = Client(host=DYDX_BASEURL)
         res = client.public.get_orderbook(market=market).data
-        ask = min([float(v["price"]) for v in res["asks"]])
-        bid = max([float(v["price"]) for v in res["bids"]])
+        ask, bid = res["asks"][0], res["bids"][0]
+        bid_ask["ask_price"] = float(ask["price"])
+        bid_ask["ask_size"] = float(ask["size"])
+        bid_ask["bid_price"] = float(bid["price"])
+        bid_ask["bid_size"] = float(bid["size"])
     except Exception as e:
         print(e)
-        return {"ask": np.nan, "bid": np.nan}
+        bid_ask = create_nan_bid_ask_dict()
+    return bid_ask
 
-    # Checking validity, since we need to determine spread ourselves
-    if ask != float(res["asks"][0]["price"]):
-        raise Exception("Error determining ask price.")
-    if bid != float(res["bids"][0]["price"]):
-        raise Exception("Error determining bis price.")
-    return {"ask": ask, "bid": bid}
+
+# =============================================================================
+# If exchange doesn't return proper data, create nan dictionary
+# =============================================================================
+def create_nan_bid_ask_dict() -> dict:
+    return {
+        "ask_price": np.nan,
+        "ask_size": np.nan,
+        "bid_price": np.nan,
+        "bid_size": np.nan,
+    }
 
 
 # =============================================================================
@@ -177,7 +192,7 @@ def append_existing_df_with_bid_ask(bid_ask, df):
 # Compute mid between ask and bid_ask
 # =============================================================================
 def compute_mid(bid_ask: dict) -> float:
-    mid = (bid_ask["ask"] + bid_ask["bid"]) / 2
+    mid = (bid_ask["ask_price"] + bid_ask["bid_price"]) / 2
     return round(mid, 3)
 
 

@@ -18,8 +18,7 @@ def jprint(*arg):
             vals = ar.values()
             if (len(keys) == len(vals)) and len(
                 [v for v in vals if isinstance(v, pd.DataFrame)]
-            ):
-
+            ):  # make sure it's just one key : one val (df)
                 ar = [[list(a)[0], list(a)[-1], ""] for a in list(ar.items())]
                 [print(item) for sublist in ar for item in sublist]
             else:
