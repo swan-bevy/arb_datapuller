@@ -114,17 +114,12 @@ def get_bid_ask_from_specific_exchange(exchange_and_market: tuple, now: dt) -> d
 # Get bid/ask market data for Ftx_Us
 # =============================================================================
 def get_bid_ask_ftx(market: str) -> dict:
-    bid_ask = {}
     try:
         url = f"{FTX_BASEURL}{market}/orderbook"
-        res = requests.get(url).json()
-        ask, bid = res["result"]["asks"][0], res["result"]["bids"][0]
-        bid_ask["ask_price"] = ask[0]
-        bid_ask["ask_size"] = ask[1]
-        bid_ask["bid_price"] = bid[0]
-        bid_ask["bid_size"] = bid[1]
+        res = requests.get(url).json()["result"]
+        bid_ask = pull_best_bid_ask_from_orderbook(res, "FTX_US")
     except Exception as e:
-        print(e)
+        print(f"Exception raised in get_bid_ask_ftx(): \n{e}")
         bid_ask = create_nan_bid_ask_dict()
     return bid_ask
 
@@ -133,18 +128,58 @@ def get_bid_ask_ftx(market: str) -> dict:
 # Get bid/ask market data for DyDx
 # =============================================================================
 def get_bid_ask_dydx(market: str) -> dict:
-    bid_ask = {}
     try:
         client = Client(host=DYDX_BASEURL)
         res = client.public.get_orderbook(market=market).data
-        ask, bid = res["asks"][0], res["bids"][0]
-        bid_ask["ask_price"] = float(ask["price"])
-        bid_ask["ask_size"] = float(ask["size"])
-        bid_ask["bid_price"] = float(bid["price"])
-        bid_ask["bid_size"] = float(bid["size"])
+        bid_ask = pull_best_bid_ask_from_orderbook(res, "DYDX")
     except Exception as e:
-        print(e)
+        print(f"Exception raised in get_bid_ask_dydx(): \n{e}")
         bid_ask = create_nan_bid_ask_dict()
+    return bid_ask
+
+
+# =============================================================================
+# Pull best bid/ask for DyDx, verify it's sorted correctly
+# =============================================================================
+def pull_best_bid_ask_from_orderbook(res: list, exchange: str) -> tuple:
+    asks, bids = res["asks"], res["bids"]
+    if exchange == "DYDX":
+        asks = [{"price": float(a["price"]), "size": float(a["size"])} for a in asks]
+        bids = [{"price": float(b["price"]), "size": float(b["size"])} for b in bids]
+    if exchange == "FTX_US":
+        asks = [{"price": a[0], "size": a[1]} for a in asks]
+        bids = [{"price": b[0], "size": b[1]} for b in bids]
+
+    best_ask = None
+    for ask in asks:
+        if best_ask is None:
+            best_ask = ask
+        elif ask["price"] < best_ask["price"]:
+            best_ask = ask
+
+    best_bid = None
+    for bid in bids:
+        if best_bid is None:
+            best_bid = bid
+        elif bid["price"] > best_bid["price"]:
+            best_bid = bid
+
+    bid_ask = {
+        "ask_price": best_ask["price"],
+        "ask_size": best_ask["size"],
+        "bid_price": best_bid["price"],
+        "bid_size": best_bid["size"],
+    }
+    # error checking
+    if bid_ask["ask_price"] != float(asks[0]["price"]):
+        raise Exception(f"{exchange} order book messed up: \n {res}")
+    if bid_ask["bid_price"] != float(bids[0]["price"]):
+        raise Exception(f"{exchange} order book messed up: \n {res}")
+
+    diff = (bid_ask["ask_price"] / bid_ask["bid_price"] - 1) * 100
+    if diff > 5:
+        jprint(f"Warning, diff is larger than 5%: {diff}")
+
     return bid_ask
 
 
@@ -304,5 +339,6 @@ def sleep_to_desired_interval(interval: int):
 
 
 if __name__ == "__main__":
+    # to active venv: source venv/bin/activate
     exchanges_obj = {"FTX_US": "ETH/USD", "DYDX": "ETH-USD"}
     main(exchanges_obj=exchanges_obj, interval=5)
