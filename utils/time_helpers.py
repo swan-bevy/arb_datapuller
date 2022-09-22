@@ -1,0 +1,41 @@
+import datetime as dt
+import time
+
+# =============================================================================
+# Generate cur datetime object
+# =============================================================================
+def determine_cur_utc_timestamp() -> dt.datetime:
+    return dt.datetime.utcnow()
+
+
+# =============================================================================
+# Generate dt str for today at midnight (format: `2022-09-20`), w/o h, m, s
+# =============================================================================
+def determine_today_str_timestamp() -> str:
+    cur = determine_cur_utc_timestamp()
+    today = cur.replace(hour=0, minute=0, second=0, microsecond=0)
+    return today.strftime("%Y-%m-%d")
+
+
+# =============================================================================
+# Determine next midnight, gives datetime_object
+# =============================================================================
+def determine_next_midnight() -> dt.datetime:
+    now = determine_cur_utc_timestamp()
+    date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    midnight = date + dt.timedelta(days=1)
+    return midnight
+
+
+# =============================================================================
+# Determines if we passed current midnight
+# =============================================================================
+def determine_if_new_day(midnight: dt.datetime) -> bool:
+    return determine_cur_utc_timestamp() >= midnight
+
+
+# =============================================================================
+# Sleep until top of minute, hour, etc
+# =============================================================================
+def sleep_to_desired_interval(interval: int):
+    time.sleep(float(interval) - (time.time() % float(interval)))

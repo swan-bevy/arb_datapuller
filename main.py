@@ -1,7 +1,7 @@
 # =============================================================================
 # IMPORTS
 # =============================================================================
-import os, sys, time
+import os, sys
 import boto3
 from io import StringIO
 import datetime as dt
@@ -13,12 +13,21 @@ import numpy as np
 import concurrent.futures
 from itertools import repeat
 
+
 # =============================================================================
 # FILE IMPORTS
 # =============================================================================
 load_dotenv()
 sys.path.append(os.path.abspath("./utils"))
 from utils.jprint import jprint
+from utils.time_helpers import (
+    determine_cur_utc_timestamp,
+    determine_today_str_timestamp,
+    determine_next_midnight,
+    determine_if_new_day,
+    sleep_to_desired_interval,
+)
+from utils.discord_webhook import determine_exchange_diff_and_alert_discort
 
 # =============================================================================
 # AWS CONFIG
@@ -60,10 +69,10 @@ def main(exchanges_obj: dict, interval: int):
     s3_paths, midnight, df_obj = reset_for_new_day(S3_BASE_PATHS)
     sleep_to_desired_interval(interval)
     while True:
-        df_obj = get_bid_ask_and_process_df(exchanges_obj, df_obj)
         if determine_if_new_day(midnight):
             save_updated_data_to_s3(s3_paths, df_obj)
             s3_paths, midnight, df_obj = reset_for_new_day(S3_BASE_PATHS)
+        df_obj = get_bid_ask_and_process_df(exchanges_obj, df_obj)
         sleep_to_desired_interval(interval)
 
 
@@ -72,6 +81,7 @@ def main(exchanges_obj: dict, interval: int):
 # =============================================================================
 def get_bid_ask_and_process_df(exchanges_obj: dict, df_obj: dict) -> dict:
     bid_asks = get_bid_ask_from_exchanges(exchanges_obj)
+    determine_exchange_diff_and_alert_discort(bid_asks)
     df_obj = update_df_obj_with_new_bid_ask_data(df_obj, bid_asks)
     jprint(df_obj)
     return df_obj
@@ -176,13 +186,15 @@ def pull_best_bid_ask_from_orderbook(res: list, exchange: str) -> tuple:
 def error_check_bid_ask_orderbook(bid_ask: dict, exchange: str, asks: list, bids: list):
     # error checking
     if bid_ask["ask_price"] != float(asks[0]["price"]):
+        print(f"{exchange} order book messed up: \n {asks}")
         raise Exception(f"{exchange} order book messed up: \n {asks}")
     if bid_ask["bid_price"] != float(bids[0]["price"]):
+        print(f"{exchange} order book messed up: \n {bids}")
         raise Exception(f"{exchange} order book messed up: \n {bids}")
 
     diff = (bid_ask["ask_price"] / bid_ask["bid_price"] - 1) * 100
     if diff > 5:
-        jprint(f"Warning, diff is larger than 5%: {diff}")
+        print(f"Warning, diff is larger than 5%: {diff}")
 
 
 # =============================================================================
@@ -291,53 +303,6 @@ def reset_for_new_day(s3_base_paths: dict) -> tuple:
     midnight = determine_next_midnight()
     df_obj = {}
     return s3_paths, midnight, df_obj
-
-
-# =============================================================================
-#
-# HELPERS
-#
-# =============================================================================
-
-
-# =============================================================================
-# Generate cur datetime object
-# =============================================================================
-def determine_cur_utc_timestamp() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
-
-
-# =============================================================================
-# Generate dt str for today at midnight (e.g. `2022-09-20`)
-# =============================================================================
-def determine_today_str_timestamp() -> str:
-    cur = determine_cur_utc_timestamp()
-    today = cur.replace(hour=0, minute=0, second=0, microsecond=0)
-    return today.strftime("%Y-%m-%d")
-
-
-# =============================================================================
-# Determine next midnight, gives datetime_object
-# =============================================================================
-def determine_next_midnight() -> dt.datetime:
-    now = determine_cur_utc_timestamp()
-    date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    midnight = date + dt.timedelta(days=1)
-    return midnight
-
-
-# =============================================================================
-# Determines if we passed current midnight
-# =============================================================================
-def determine_if_new_day(midnight: dt.datetime) -> bool:
-    return determine_cur_utc_timestamp() >= midnight
-
-
-# =============================================================================
-# Sleep until top of minute, hour, etc
-# =============================================================================
-def sleep_to_desired_interval(interval: int):
-    time.sleep(float(interval) - (time.time() % float(interval)))
 
 
 if __name__ == "__main__":
