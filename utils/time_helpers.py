@@ -39,3 +39,10 @@ def determine_if_new_day(midnight: dt.datetime) -> bool:
 # =============================================================================
 def sleep_to_desired_interval(interval: int):
     time.sleep(float(interval) - (time.time() % float(interval)))
+
+
+# =============================================================================
+# Convert timestamp to date (e.g. 2022-09-23), ignore hr, min, sec
+# =============================================================================
+def convert_timestamp_to_today_date(timestamp):
+    return timestamp.strftime("%Y-%m-%d")

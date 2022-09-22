@@ -28,6 +28,7 @@ from utils.time_helpers import (
     sleep_to_desired_interval,
 )
 from utils.discord_webhook import determine_exchange_diff_and_alert_discort
+from ArbDiff import ArbDiff
 
 # =============================================================================
 # AWS CONFIG
@@ -60,17 +61,14 @@ DYDX_BASEURL = "https://api.dydx.exchange"  # No "/" at end!
 
 
 # =============================================================================
-# Get market data for exchanges, iterate infinitely
-# Exchanges_obj is a dict with exchange as key, and pair/market as value
-# Interval is an integer representing seconds
+# Pull bid/ask from exchanges, save to S3 at midnight
 # =============================================================================
-
-
 class ArbDataPuller:
     def __init__(self, exchanges_obj: dict, interval: int):
         self.exchanges_obj = exchanges_obj
         self.interval = interval
         self.S3_BASE_PATHS = self.determine_general_s3_filepaths()
+        self.ArbDiff = ArbDiff()
 
     # =============================================================================
     # Get market data for exchanges, iterate infinitely
@@ -80,6 +78,7 @@ class ArbDataPuller:
         sleep_to_desired_interval(self.interval)
         while True:
             if determine_if_new_day(self.midnight):
+                self.prepare_df_obj_for_s3()
                 self.save_updated_data_to_s3()
                 self.reset_for_new_day()
             self.get_bid_ask_and_process_df()
@@ -138,7 +137,7 @@ class ArbDataPuller:
             res = requests.get(url).json()["result"]
             bid_ask = self.pull_best_bid_ask_from_orderbook(res, "FTX_US")
         except Exception as e:
-            print(f"Exception raised in get_bid_ask_ftx(): \n{e}")
+            print(f"Exception raised in get_bid_ask_ftx(): {e}")
             bid_ask = self.create_nan_bid_ask_dict()
         return bid_ask
 
@@ -151,7 +150,7 @@ class ArbDataPuller:
             res = client.public.get_orderbook(market=market).data
             bid_ask = self.pull_best_bid_ask_from_orderbook(res, "DYDX")
         except Exception as e:
-            print(f"Exception raised in get_bid_ask_dydx(): \n{e}")
+            print(f"Exception raised in get_bid_ask_dydx(): {e}")
             bid_ask = self.create_nan_bid_ask_dict()
         return bid_ask
 
@@ -161,26 +160,19 @@ class ArbDataPuller:
     def pull_best_bid_ask_from_orderbook(self, res: list, exchange: str) -> tuple:
         asks, bids = res["asks"], res["bids"]
         if exchange == "DYDX":
-            asks = [
-                {"price": float(a["price"]), "size": float(a["size"])} for a in asks
-            ]
-            bids = [
-                {"price": float(b["price"]), "size": float(b["size"])} for b in bids
-            ]
+            asks = pd.DataFrame(asks)
+            asks["price"] = pd.to_numeric(asks["price"])
+            asks["size"] = pd.to_numeric(asks["size"])
+            bids = pd.DataFrame(bids)
+            bids["price"] = pd.to_numeric(bids["price"])
+            bids["size"] = pd.to_numeric(bids["size"])
+
         if exchange == "FTX_US":
-            asks = [{"price": a[0], "size": a[1]} for a in asks]
-            bids = [{"price": b[0], "size": b[1]} for b in bids]
+            asks = pd.DataFrame(asks, columns=["price", "size"])
+            bids = pd.DataFrame(bids, columns=["price", "size"])
 
-        best_ask = asks[0]
-        for ask in asks:
-            if ask["price"] < best_ask["price"]:
-                best_ask = ask
-
-        best_bid = bids[0]
-        for bid in bids:
-            if bid["price"] > best_bid["price"]:
-                best_bid = bid
-
+        best_ask = asks.iloc[asks["price"].idxmin()]
+        best_bid = bids.iloc[bids["price"].idxmax()]
         bid_ask = {
             "ask_price": best_ask["price"],
             "ask_size": best_ask["size"],
@@ -197,10 +189,10 @@ class ArbDataPuller:
         self, bid_ask: dict, exchange: str, asks: list, bids: list
     ):
         # error checking
-        if bid_ask["ask_price"] != float(asks[0]["price"]):
+        if bid_ask["ask_price"] != asks.iloc[0]["price"]:
             print(f"{exchange} order book messed up: \n {asks}")
             raise Exception(f"{exchange} order book messed up: \n {asks}")
-        if bid_ask["bid_price"] != float(bids[0]["price"]):
+        if bid_ask["bid_price"] != float(bids.iloc[0]["price"]):
             print(f"{exchange} order book messed up: \n {bids}")
             raise Exception(f"{exchange} order book messed up: \n {bids}")
 
@@ -278,7 +270,6 @@ class ArbDataPuller:
     # Save the updated df to S3
     # =============================================================================
     def save_updated_data_to_s3(self) -> None:
-        self.prepare_df_obj_for_s3()
         for exchange, df in self.df_obj.items():
             path = self.s3_paths[exchange]
             csv_buffer = StringIO()
