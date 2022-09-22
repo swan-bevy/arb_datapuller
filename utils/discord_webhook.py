@@ -5,12 +5,23 @@ from discord import SyncWebhook
 from decimal import Decimal
 
 DISCORD_URL = "https://discord.com/api/webhooks/1022260697037541457/sH6v5xoDBSykaEyn1W91GtesMVC6PurG8ksESCbwR5VlxXi9FXFWlrc-OmnHQzA7RBWN"
+
 # =============================================================================
 # Check $$$ diff between exchanges and alert discord if sufficient.
 # =============================================================================
-def determine_exchange_diff_and_alert_discort(bid_asks: list):
-    msgs = []
+def determine_exchange_diff_and_alert_discord(bid_asks: list):
+    try:
+        msgs = determine_exchange_diff(bid_asks)
+        post_msg_to_discord(msgs)
+    except Exception as e:
+        print(f"Discrod webhook failed with this message: {e}")
 
+
+# =============================================================================
+# Check $$$ diff between exchanges
+# =============================================================================
+def determine_exchange_diff(bid_asks: list):
+    msgs = []
     for i, cur in enumerate(bid_asks[:-1]):
         _next = bid_asks[i + 1]
         exchange0, exchange1 = cur["exchange"], _next["exchange"]
@@ -27,8 +38,7 @@ def determine_exchange_diff_and_alert_discort(bid_asks: list):
         if mid_diff > 5:
             msg = format_msg_for_discord("Mid", exchange0, exchange1, mid_diff)
             msgs.append(msg)
-    for msg in msgs:
-        post_msg_to_discord(msg)
+    return msgs
 
 
 # =============================================================================

@@ -41,8 +41,8 @@ BUCKET_NAME = "arb-live-data"
 # Determine bid/ask differences between exchanges
 # =============================================================================
 class ArbDiff:
-    def __init__(self, df_obj: dict):
-        self.df_obj = df_obj
+    def __init__(self, exchanges, market):
+        self.market = market
         self.exchanges = list(df_obj.keys())
         self.pairs = self.create_unique_exchange_pairs()
 
@@ -144,13 +144,18 @@ class ArbDiff:
         for pair, df in self.merged_obj.items():
             today = convert_timestamp_to_today_date(df.index[0])
             path = f"Difference/{today}/{pair}_{today}.csv"
-
             csv_buffer = StringIO()
             df.to_csv(csv_buffer)
             response = s3.put_object(
                 Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
             )
             pprint(response)
+
+            # 1. s3 object
+            # 2. today
+            # 3. exchange_pair
+            # 4. market
+            # 5. bucket name
 
 
 if __name__ == "__main__":

@@ -13,6 +13,8 @@ import numpy as np
 import concurrent.futures
 from itertools import repeat
 
+from sympy import EX
+
 
 # =============================================================================
 # FILE IMPORTS
@@ -27,7 +29,7 @@ from utils.time_helpers import (
     determine_if_new_day,
     sleep_to_desired_interval,
 )
-from utils.discord_webhook import determine_exchange_diff_and_alert_discort
+from utils.discord_webhook import determine_exchange_diff_and_alert_discord
 from ArbDiff import ArbDiff
 
 # =============================================================================
@@ -66,9 +68,12 @@ DYDX_BASEURL = "https://api.dydx.exchange"  # No "/" at end!
 class ArbDataPuller:
     def __init__(self, exchanges_obj: dict, interval: int):
         self.exchanges_obj = exchanges_obj
+        self.exchanges = list(exchanges_obj.keys())
+        self.market = self.determine_market()
         self.interval = interval
         self.S3_BASE_PATHS = self.determine_general_s3_filepaths()
-        self.ArbDiff = ArbDiff()
+        self.s3 = s3
+        self.ArbDiff = ArbDiff(self.exchanges, self.market)
 
     # =============================================================================
     # Get market data for exchanges, iterate infinitely
@@ -76,9 +81,12 @@ class ArbDataPuller:
     def main(self):
         self.reset_for_new_day()
         sleep_to_desired_interval(self.interval)
-        while True:
-            if determine_if_new_day(self.midnight):
+        # while True:
+        for i in range(6):
+            # if determine_if_new_day(self.midnight):
+            if i == 5:
                 self.prepare_df_obj_for_s3()
+                print("saving")
                 self.save_updated_data_to_s3()
                 self.reset_for_new_day()
             self.get_bid_ask_and_process_df()
@@ -89,7 +97,7 @@ class ArbDataPuller:
     # =============================================================================
     def get_bid_ask_and_process_df(self) -> dict:
         bid_asks = self.get_bid_ask_from_exchanges()
-        determine_exchange_diff_and_alert_discort(bid_asks)
+        determine_exchange_diff_and_alert_discord(bid_asks)
         self.update_df_obj_with_new_bid_ask_data(bid_asks)
         jprint(self.df_obj)
 
@@ -245,41 +253,6 @@ class ArbDataPuller:
         return round(mid, 3)
 
     # =============================================================================
-    # Get all relevant filepaths to fetch and save data to
-    # =============================================================================
-    def determine_general_s3_filepaths(self) -> dict:
-        s3_base_paths = {}
-        for exchange, market in self.exchanges_obj.items():
-            if "/" in market:
-                market = market.replace("/", "-")
-            path = f"{exchange}/{market}/{exchange}-{market}"
-            s3_base_paths[exchange] = path
-        return s3_base_paths
-
-    # =============================================================================
-    # Create filesnames for today's date (date in filename!)
-    # =============================================================================
-    def update_s3_filepaths(self):
-        updated = {}
-        today = determine_today_str_timestamp()
-        for exchange, path in self.S3_BASE_PATHS.items():
-            updated[exchange] = f"{path}-{today}.csv"
-        return updated
-
-    # =============================================================================
-    # Save the updated df to S3
-    # =============================================================================
-    def save_updated_data_to_s3(self) -> None:
-        for exchange, df in self.df_obj.items():
-            path = self.s3_paths[exchange]
-            csv_buffer = StringIO()
-            df.to_csv(csv_buffer)
-            response = s3.put_object(
-                Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
-            )
-            jprint(response)
-
-    # =============================================================================
     # Preare the final df_obj to be save to S3
     # =============================================================================
     def prepare_df_obj_for_s3(self) -> dict:
@@ -289,10 +262,59 @@ class ArbDataPuller:
             self.df_obj[exchange] = df
 
     # =============================================================================
+    # Save the updated df to S3
+    # =============================================================================
+    def save_updated_data_to_s3(self) -> None:
+        for exchange, df in self.df_obj.items():
+            path = self.update_cur_s3_filepath(self.S3_BASE_PATHS[exchange])
+            print(path)
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer)
+            # response = s3.put_object(
+            #     Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
+            # )
+            # jprint(response)
+
+    # =============================================================================
+    # Create filesnames for today's date (date in filename!)
+    # =============================================================================
+    def update_cur_s3_filepath(self, base_path: str):
+        return f"{base_path}-{self.today}.csv"
+
+    # =============================================================================
+    #
+    # HELPERS
+    #
+    # =============================================================================
+
+    # =============================================================================
+    # Determine market and make uniform (e.g. ETH/USD => ETH-USD)
+    # =============================================================================
+    def determine_market(self):
+        symbols = []
+        for market in self.exchanges_obj.values():
+            if "/" in market:
+                market = market.replace("/", "-")
+            elif "_" in market:
+                market = market.replace("_", "-")
+            symbols.append(market)
+        return all([x == symbols[0] for x in symbols])
+
+    # =============================================================================
+    # Get all relevant filepaths to fetch and save data to
+    # =============================================================================
+    def determine_general_s3_filepaths(self) -> dict:
+        s3_base_paths = {}
+        for exchange in self.exchanges_obj.keys():
+            path = f"{exchange}/{self.market}/{exchange}-{self.market}"
+            s3_base_paths[exchange] = path
+        return s3_base_paths
+
+    # =============================================================================
     # Reset all values that start a new with new day
     # =============================================================================
     def reset_for_new_day(self) -> tuple:
-        self.s3_paths = self.update_s3_filepaths()
+        self.today = determine_today_str_timestamp()
         self.midnight = determine_next_midnight()
         self.df_obj = {}
 
