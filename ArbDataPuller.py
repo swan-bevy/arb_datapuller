@@ -29,8 +29,8 @@ from utils.time_helpers import (
     determine_if_new_day,
     sleep_to_desired_interval,
 )
-from utils.DiscordAlert import DiscordAlert
 
+from DiscordAlert import DiscordAlert
 from ArbDiff import ArbDiff
 
 # =============================================================================
@@ -69,13 +69,14 @@ DYDX_BASEURL = "https://api.dydx.exchange"  # No "/" at end!
 class ArbDataPuller:
     def __init__(self, exchanges_obj: dict, interval: int):
         self.exchanges_obj = exchanges_obj
-        self.exchanges = list(exchanges_obj.keys())
+        self.exchanges = self.make_list_of_exchanges(exchanges_obj)
+        self.diff_pairs = self.create_unique_exchange_pairs()
         self.market = self.determine_market()
         self.interval = interval
         self.S3_BASE_PATHS = self.determine_general_s3_filepaths()
         self.s3 = s3
-        self.Discord = DiscordAlert()
-        self.ArbDiff = ArbDiff(self.exchanges, self.market)
+        self.Discord = DiscordAlert(self.diff_pairs)
+        self.ArbDiff = ArbDiff(self.diff_pairs, self.market)
 
     # =============================================================================
     # Get market data for exchanges, iterate infinitely
@@ -96,7 +97,7 @@ class ArbDataPuller:
         self.prepare_df_obj_for_s3()
         self.save_updated_data_to_s3()
         self.ArbDiff.main(self.df_obj, self.today)
-        self.reset_for_new_day()
+        self.reset_for_new_day()  # must come last!
 
     # =============================================================================
     # Get bid ask data and update dataframe obj for all exchanges
@@ -104,17 +105,14 @@ class ArbDataPuller:
     def get_bid_ask_and_process_df(self) -> dict:
         bid_asks = self.get_bid_ask_from_exchanges()
         self.update_df_obj_with_new_bid_ask_data(bid_asks)
-        jprint("HERE: ", bid_asks)
-        quit()
-        # determine_exchange_diff_and_alert_discord(bid_asks)
-
+        self.Discord.determine_exchange_diff_and_alert_discord(bid_asks)
         jprint(self.df_obj)
 
     # =============================================================================
     # Get current bid ask data from exchange using THREADDING
     # =============================================================================
-    def get_bid_ask_from_exchanges(self) -> list:
-        bid_asks = []
+    def get_bid_ask_from_exchanges(self) -> dict:
+        bid_asks = {}
         now = determine_cur_utc_timestamp()
         with concurrent.futures.ThreadPoolExecutor() as executor:
             result = executor.map(
@@ -123,7 +121,8 @@ class ArbDataPuller:
                 repeat(now),
             )
             for r in result:
-                bid_asks.append(r)
+                exchange, bid_ask = r
+                bid_asks[exchange] = bid_ask
         return bid_asks
 
     # =============================================================================
@@ -140,10 +139,9 @@ class ArbDataPuller:
         else:
             raise Exception("No function exists for this exchange.")
 
-        bid_ask["exchange"] = exchange
         bid_ask["timestamp"] = now
         bid_ask["mid"] = self.compute_mid(bid_ask)
-        return bid_ask
+        return exchange, bid_ask
 
     # =============================================================================
     # Get bid/ask market data for Ftx_Us
@@ -215,7 +213,8 @@ class ArbDataPuller:
 
         diff = (bid_ask["ask_price"] / bid_ask["bid_price"] - 1) * 100
         if diff > 5:
-            print(f"Warning, diff is larger than 5%: {diff}")
+            print(f"Warning, bid_ask diff is larger than 5%: {diff}.")
+            print(f"This is unrelated to inter-exchange difference.")
 
     # =============================================================================
     # If exchange doesn't return proper data, create nan dictionary
@@ -231,9 +230,8 @@ class ArbDataPuller:
     # =============================================================================
     # If no data frame exists, create dataframe
     # =============================================================================
-    def update_df_obj_with_new_bid_ask_data(self, bid_asks: list) -> dict:
-        for bid_ask in bid_asks:
-            exchange = bid_ask.pop("exchange")
+    def update_df_obj_with_new_bid_ask_data(self, bid_asks: dict) -> dict:
+        for exchange, bid_ask in bid_asks.items():
             if exchange not in self.df_obj:
                 df = self.create_new_df_with_bid_ask(bid_ask)
             else:
@@ -294,6 +292,29 @@ class ArbDataPuller:
     # HELPERS
     #
     # =============================================================================
+
+    # =============================================================================
+    # Create all unique exchange pairs for diff calculation later
+    # =============================================================================
+    def create_unique_exchange_pairs(self):
+        i = 0
+        pairs = []
+        for i, ex in enumerate(self.exchanges[:-1]):
+            j = i + 1
+            for ex2 in self.exchanges[j:]:
+                pairs.append(f"{ex}-{ex2}")
+        return pairs
+
+    # =============================================================================
+    # Get exchanges, make sure they're not hyphonated
+    # =============================================================================
+    def make_list_of_exchanges(self, exchanges_obj: dict):
+        exchanges = list(exchanges_obj.keys())
+        for ex in exchanges:
+            if "-" in ex:
+                msg = f"Naming convention: Rename exchange. {ex} cannot contain a - (hyphon) in its name."
+                raise Exception(msg)
+        return exchanges
 
     # =============================================================================
     # Determine market and make uniform (e.g. ETH/USD => ETH-USD)

@@ -42,10 +42,9 @@ BUCKET_NAME = "arb-live-data"
 # CAUTION: Differentiate between (original) df_obj & (processed) merged_obj!!!
 # =============================================================================
 class ArbDiff:
-    def __init__(self, exchanges, market):
-        self.exchanges = exchanges
+    def __init__(self, diff_pairs, market):
+        self.diff_pairs = diff_pairs
         self.market = market
-        self.pairs = self.create_unique_exchange_pairs()
 
     # =============================================================================
     # bla bla
@@ -58,23 +57,11 @@ class ArbDiff:
         self.save_diff_dfs_to_s3(today)
 
     # =============================================================================
-    # Create all unique exchange pairs
-    # =============================================================================
-    def create_unique_exchange_pairs(self):
-        i = 0
-        pairs = []
-        for i, ex in enumerate(self.exchanges[:-1]):
-            j = i + 1
-            for ex2 in self.exchanges[j:]:
-                pairs.append(f"{ex}-{ex2}")
-        return pairs
-
-    # =============================================================================
     # Create merged dfs for exchange pairs
     # =============================================================================
     def merge_dfs_for_pais(self, df_obj):
         merged_obj = {}
-        for pair in self.pairs:
+        for pair in self.diff_pairs:
             ex0, ex1 = pair.split("-")
             df0, df1 = df_obj[ex0], df_obj[ex1]
             df0 = self.rename_columns(ex0, df0)
