@@ -34,8 +34,7 @@ class DiscordAlert:
     def determine_exchange_diff_and_alert_discord(self, bid_asks: dict):
         try:
             msgs = self.determine_exchange_diff(bid_asks)
-            print("Discord: ", msgs)
-            # self.post_msg_to_discord(msgs)
+            self.post_msg_to_discord(msgs)
         except Exception as e:
             traceback.print_exc()
             print(f"Disord webhook failed with this message: {e}")

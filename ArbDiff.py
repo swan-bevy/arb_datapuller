@@ -50,8 +50,6 @@ class ArbDiff:
     # bla bla
     # =============================================================================
     def main(self, df_obj: dict, today: str):
-        pprint("Midnight event: ")
-        pprint(df_obj)
         try:
             self.merge_dfs_for_pairs(df_obj)
             self.compute_price_diffs()
