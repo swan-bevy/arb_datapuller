@@ -84,17 +84,18 @@ class ArbDataPuller:
     def main(self):
         self.reset_for_new_day()
         sleep_to_desired_interval(self.interval)
-        while True:
-            if determine_if_new_day(self.midnight):
+        # while True:
+        for i in range(20):
+            # if determine_if_new_day(self.midnight):
+            if i == 19:
                 self.handle_midnight_event()
-            self.get_bid_ask_and_process_df()
+            self.get_bid_ask_and_process_df_and_test_diff()
             sleep_to_desired_interval(self.interval)
 
     # =============================================================================
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
-        self.prepare_df_obj_for_s3()
         self.save_updated_data_to_s3()
         self.ArbDiff.main(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
@@ -102,7 +103,7 @@ class ArbDataPuller:
     # =============================================================================
     # Get bid ask data and update dataframe obj for all exchanges
     # =============================================================================
-    def get_bid_ask_and_process_df(self) -> dict:
+    def get_bid_ask_and_process_df_and_test_diff(self) -> dict:
         bid_asks = self.get_bid_ask_from_exchanges()
         self.update_df_obj_with_new_bid_ask_data(bid_asks)
         self.Discord.determine_exchange_diff_and_alert_discord(bid_asks)
@@ -259,19 +260,11 @@ class ArbDataPuller:
         return round(mid, 3)
 
     # =============================================================================
-    # Preare the final df_obj to be save to S3
-    # =============================================================================
-    def prepare_df_obj_for_s3(self) -> dict:
-        for exchange, df in self.df_obj.items():
-            df = df.set_index("timestamp")
-            df.index = pd.to_datetime(df.index).tz_localize(None)
-            self.df_obj[exchange] = df
-
-    # =============================================================================
     # Save the updated df to S3
     # =============================================================================
     def save_updated_data_to_s3(self) -> None:
         for exchange, df in self.df_obj.items():
+            df = self.prepare_df_for_s3(df)
             path = self.update_cur_s3_filepath(self.S3_BASE_PATHS[exchange])
             print(path)
             csv_buffer = StringIO()
@@ -280,6 +273,14 @@ class ArbDataPuller:
                 Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
             )
             jprint(response)
+
+    # =============================================================================
+    # Preare the final df_obj to be save to S3
+    # =============================================================================
+    def prepare_df_for_s3(self, df) -> dict:
+        df = df.set_index("timestamp")
+        df.index = pd.to_datetime(df.index).tz_localize(None)
+        return df
 
     # =============================================================================
     # Create filesnames for today's date (date in filename!)
@@ -327,7 +328,9 @@ class ArbDataPuller:
             elif "_" in market:
                 market = market.replace("_", "-")
             symbols.append(market)
-        return all([x == symbols[0] for x in symbols])
+        if all([x == symbols[0] for x in symbols]):
+            return symbols[0]
+        raise Exception(f"Inproperly formatted market. {symbols}")
 
     # =============================================================================
     # Get all relevant filepaths to fetch and save data to

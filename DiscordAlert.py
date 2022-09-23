@@ -1,23 +1,32 @@
 # =============================================================================
 # IMPORTS
 # =============================================================================
+import traceback
 from discord import SyncWebhook
 from utils.decimal_helper import dec
 from utils.jprint import jprint
-from utils.time_helpers import determine_cur_utc_timestamp, convert_datetime_str_to_obj
+from utils.time_helpers import (
+    determine_cur_utc_timestamp,
+    convert_datetime_str_to_obj,
+    convert_sec_to_min,
+)
 
-DISCORD_URL = "https://discord.com/api/webhooks/1022260697037541457/sH6v5xoDBSykaEyn1W91GtesMVC6PurG8ksESCbwR5VlxXi9FXFWlrc-OmnHQzA7RBWN"
 
 # =============================================================================
 # CONSTANTS
 # =============================================================================
-LOWER_BOUND_THRESHOLD_MULT = 0.9
+DISCORD_URL = "https://discord.com/api/webhooks/1022260697037541457/sH6v5xoDBSykaEyn1W91GtesMVC6PurG8ksESCbwR5VlxXi9FXFWlrc-OmnHQzA7RBWN"
+SECS_PER_HOUR = 60 * 60
 
-
+# =============================================================================
+# This class check bid_ask data for exchange arbitrage opportunities and send to Discord
+# =============================================================================
 class DiscordAlert:
     def __init__(self, diff_pairs):
         self.diff_pairs = diff_pairs
-        self.thresholds = self.reset_thresholds()
+        self.thresholds = {p: {"value": 1, "timestamp": None} for p in diff_pairs}
+        self.thresh_reset_time = SECS_PER_HOUR
+        self.thresh_incr = 5  # $$$-terms used to upwards increment thresh
 
     # =============================================================================
     # Check $$$ diff between exchanges and alert discord if sufficient.
@@ -25,8 +34,10 @@ class DiscordAlert:
     def determine_exchange_diff_and_alert_discord(self, bid_asks: dict):
         try:
             msgs = self.determine_exchange_diff(bid_asks)
-            self.post_msg_to_discord(msgs)
+            print("Discord: ", msgs)
+            # self.post_msg_to_discord(msgs)
         except Exception as e:
+            traceback.print_exc()
             print(f"Disord webhook failed with this message: {e}")
 
     # =============================================================================
@@ -38,14 +49,11 @@ class DiscordAlert:
             ex0, ex1 = pair.split("-")
             bid_ask0, bid_ask1 = bid_asks[ex0], bid_asks[ex1]
             diff = self.compute_price_diff(bid_ask0, bid_ask1)
-            print("Diff: ", diff)
-            cur_thresh = self.determine_cur_threshold(pair)
-            surpassed = self.is_diff_bigger_than_cur_thresh(pair, diff, cur_thresh)
-            if surpassed:
-                msg = self.format_msg_for_discord(pair, diff, cur_thresh)
+            cur_thresh = self.check_thresh_and_reset_if_necessary(pair)
+            if cur_thresh["value"] < diff:
+                msg = self.format_msg_for_discord(pair, diff)
                 msgs.append(msg)
-            elif not surpassed:
-                self.check_if_below_th_and_deactivate(pair, diff, cur_thresh)
+                self.increase_and_update_threshold(pair)
         return msgs
 
     # =============================================================================
@@ -57,78 +65,33 @@ class DiscordAlert:
         return float(diff)
 
     # =============================================================================
-    # Determine the current minimum threshold
+    # Check current thresh and reset if time is up
     # =============================================================================
-    def determine_cur_threshold(self, pair: str):
-        threshs = self.thresholds[pair]
-        if not threshs["low"]["surpassed"]:
-            return "low"
-        elif not threshs["mid"]["surpassed"]:
-            return "mid"
-        elif not threshs["high"]["surpassed"]:
-            return "high"
-        else:
-            return "surpassed_all"
-
-    # =============================================================================
-    # Determine the current minimum threshold
-    # =============================================================================
-    def check_if_thresh_active(self, threshs: dict, level: str):
-        surpassed = threshs[level]["surpassed"]  # has this thresh been activated
-        last_triggered = threshs[level]["timestamp"]
+    def check_thresh_and_reset_if_necessary(self, pair):
+        last_triggered = self.thresholds[pair]["timestamp"]
         if last_triggered is None:
-            return surpassed
+            return self.thresholds[pair]
         now = determine_cur_utc_timestamp()
-        minutes_apart = ((now - last_triggered).seconds) / 60
-
-        ### CONTINUE HERE!!!
-        return surpassed or minutes_apart < 60
-
-    # =============================================================================
-    # Check if difference goes above
-    # =============================================================================
-    def is_diff_bigger_than_cur_thresh(self, pair: str, diff: float, cur_thresh: str):
-        if cur_thresh == "surpassed_all":
-            return False
-        thresh_val = self.thresholds[pair][cur_thresh]["value"]
-        if diff > thresh_val:
-            self.thresholds[pair][cur_thresh]["surpassed"] = True  ## Important
-            return True
-        return False
+        secs_apart = (now - last_triggered).seconds
+        if secs_apart > self.thresh_reset_time:
+            self.reset_thresold(pair)
+        return self.thresholds[pair]
 
     # =============================================================================
-    # Check if we went below the previous threshold, deactivate if so
-    # Don't take exact thesh value, take something 10% below
+    # Check current thresh and reset if time is up
     # =============================================================================
-    def check_if_below_th_and_deactivate(self, pair: str, diff: float, cur_thresh: str):
-        prev_thresh = self.determine_prev_threshold(cur_thresh)
-        if prev_thresh is None:
-            return
-        prev_val = self.thresholds[pair][prev_thresh]["value"]
-        prev_val = prev_val * LOWER_BOUND_THRESHOLD_MULT
-        if diff < prev_val:
-            self.thresholds[pair][prev_thresh]["surpassed"] = False  ## Important
-
-    # =============================================================================
-    # Determine the most recent/previous surpassed threshold
-    # =============================================================================
-    def determine_prev_threshold(self, cur_thresh: str):
-        if cur_thresh == "low":
-            return None  # No threshold active
-        elif cur_thresh == "mid":
-            return "low"
-        elif cur_thresh == "high":
-            return "mid"
-        elif cur_thresh == "surpassed_all":
-            return "high"
+    def increase_and_update_threshold(self, pair):
+        val = self.thresholds[pair]["value"]
+        new_val = (val // self.thresh_incr) * self.thresh_incr + self.thresh_incr
+        new_timestamp = determine_cur_utc_timestamp()
+        self.thresholds[pair] = {"value": new_val, "timestamp": new_timestamp}
 
     # =============================================================================
     # Format message for discord webhook
     # =============================================================================
-    def format_msg_for_discord(self, pair: str, diff: float, cur_thresh: str):
-        thresh_val = self.thresholds[pair][cur_thresh]["value"]
-
-        msg0 = f"ALERT: Arbitrage opportunity.\n"
+    def format_msg_for_discord(self, pair: str, diff: float):
+        thresh_val = self.thresholds[pair]["value"]
+        msg0 = f"ALERT (semi-testing): Arbitrage opportunity.\n"
         msg1 = f"Diff surpassed threshold of: ${thresh_val}\n"
         msg2 = f"Price difference between {pair} is: ${diff}"
         return msg0 + msg1 + msg2
@@ -145,32 +108,25 @@ class DiscordAlert:
                 webhook.send(msg)
 
     # =============================================================================
-    # Set/reset thresholds
+    # Reset thresholds
     # =============================================================================
-    def reset_thresholds(self):
-        thresholds = {}
-        for pair in self.diff_pairs:
-            thresh = {
-                "low": {"value": 1, "surpassed": False, "timestamp": None},
-                "mid": {"value": 5, "surpassed": False, "timestamp": None},
-                "high": {"value": 10, "surpassed": False, "timestamp": None},
-            }
-            thresholds[pair] = thresh
-        return thresholds
+    def reset_thresold(self, pair):
+        self.thresholds[pair] = {"value": 1, "timestamp": None}
 
 
 if __name__ == "__main__":
     disc = DiscordAlert(["DYDX-FTX_US"])
     bid_asks = [
-        {"DYDX": {"mid": 99.8}, "FTX_US": {"mid": 99}},
-        {"DYDX": {"mid": 110}, "FTX_US": {"mid": 99}},
-        {"DYDX": {"mid": 110}, "FTX_US": {"mid": 99}},
-        {"DYDX": {"mid": 110}, "FTX_US": {"mid": 99}},
-        {"DYDX": {"mid": 110}, "FTX_US": {"mid": 99}},
-        {"DYDX": {"mid": 99}, "FTX_US": {"mid": 99}},
-        {"DYDX": {"mid": 99}, "FTX_US": {"mid": 99}},
-        {"DYDX": {"mid": 99}, "FTX_US": {"mid": 99}},
-        # {"DYDX": {"mid": 120}, "FTX_US": {"mid": 99}},
+        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
     ]
     for b_a in bid_asks:
         disc.determine_exchange_diff_and_alert_discord(b_a)

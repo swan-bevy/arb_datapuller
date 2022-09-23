@@ -3,7 +3,7 @@
 # =============================================================================
 import pandas as pd
 import datetime as dt
-import sys, os
+import os, traceback
 import boto3
 import glob
 from io import StringIO
@@ -50,16 +50,22 @@ class ArbDiff:
     # bla bla
     # =============================================================================
     def main(self, df_obj: dict, today: str):
-        self.merge_dfs_for_pais(df_obj)
-        self.compute_price_diffs()
-        self.reorder_df_columns()
-        self.prepare_diff_dfs_for_s3()
-        self.save_diff_dfs_to_s3(today)
+        pprint("Midnight event: ")
+        pprint(df_obj)
+        try:
+            self.merge_dfs_for_pairs(df_obj)
+            self.compute_price_diffs()
+            self.reorder_df_columns()
+            self.prepare_diff_dfs_for_s3()
+            self.save_diff_dfs_to_s3(today)
+        except Exception as e:
+            traceback.print_exc()
+            print(f"ArbDiff failed execution with error message: {e}")
 
     # =============================================================================
     # Create merged dfs for exchange pairs
     # =============================================================================
-    def merge_dfs_for_pais(self, df_obj):
+    def merge_dfs_for_pairs(self, df_obj):
         merged_obj = {}
         for pair in self.diff_pairs:
             ex0, ex1 = pair.split("-")
@@ -88,9 +94,9 @@ class ArbDiff:
     def compute_price_diffs(self):
         for pair, df in self.merged_obj.items():
             ex0, ex1 = pair.split("-")
-            df[f"{pair}_ask"] = (df[f"{ex0}_ask"] - df[f"{ex1}_ask"]).abs()
-            df[f"{pair}_bid"] = (df[f"{ex0}_bid"] - df[f"{ex1}_bid"]).abs()
-            df[f"{pair}_mid"] = (df[f"{ex0}_mid"] - df[f"{ex1}_mid"]).abs()
+            df[f"{pair}_ask"] = (df[f"{ex0}_ask"] - df[f"{ex1}_ask"]).abs().round(2)
+            df[f"{pair}_bid"] = (df[f"{ex0}_bid"] - df[f"{ex1}_bid"]).abs().round(2)
+            df[f"{pair}_mid"] = (df[f"{ex0}_mid"] - df[f"{ex1}_mid"]).abs().round(2)
             self.merged_obj[pair] = df
 
     # =============================================================================
@@ -136,12 +142,6 @@ class ArbDiff:
                 Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
             )
             pprint(response)
-
-            # 1. s3 object
-            # 2. today (x)
-            # 3. exchange_pair (x)
-            # 4. market (x)
-            # 5. bucket name (x)
 
 
 if __name__ == "__main__":

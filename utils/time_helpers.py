@@ -60,3 +60,10 @@ def convert_timestamp_to_today_date(timestamp):
 # =============================================================================
 def convert_datetime_str_to_obj(s):
     return dt.datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
+
+
+# =============================================================================
+# Convert seconds to minutes
+# =============================================================================
+def convert_sec_to_min(secs: int):
+    return secs / 60
