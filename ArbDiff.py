@@ -39,22 +39,23 @@ BUCKET_NAME = "arb-live-data"
 
 # =============================================================================
 # Determine bid/ask differences between exchanges
+# CAUTION: Differentiate between (original) df_obj & (processed) merged_obj!!!
 # =============================================================================
 class ArbDiff:
     def __init__(self, exchanges, market):
+        self.exchanges = exchanges
         self.market = market
-        self.exchanges = list(df_obj.keys())
         self.pairs = self.create_unique_exchange_pairs()
 
     # =============================================================================
     # bla bla
     # =============================================================================
-    def main(self):
-        self.merge_dfs_for_pais()
+    def main(self, df_obj: dict, today: str):
+        self.merge_dfs_for_pais(df_obj)
         self.compute_price_diffs()
         self.reorder_df_columns()
         self.prepare_diff_dfs_for_s3()
-        self.save_diff_dfs_to_s3()
+        self.save_diff_dfs_to_s3(today)
 
     # =============================================================================
     # Create all unique exchange pairs
@@ -71,11 +72,11 @@ class ArbDiff:
     # =============================================================================
     # Create merged dfs for exchange pairs
     # =============================================================================
-    def merge_dfs_for_pais(self):
+    def merge_dfs_for_pais(self, df_obj):
         merged_obj = {}
         for pair in self.pairs:
             ex0, ex1 = pair.split("-")
-            df0, df1 = self.df_obj[ex0], self.df_obj[ex1]
+            df0, df1 = df_obj[ex0], df_obj[ex1]
             df0 = self.rename_columns(ex0, df0)
             df1 = self.rename_columns(ex1, df1)
             merged = pd.merge(df0, df1, on="timestamp", how="inner")
@@ -128,11 +129,10 @@ class ArbDiff:
             self.merged_obj[pair] = df
 
     # =============================================================================
-    # Format timestamps and such
+    # Format timestamps and such for MERGED OBJ
     # =============================================================================
     def prepare_diff_dfs_for_s3(self):
         for pair, df in self.merged_obj.items():
-            ### REMOVE WHEN USING THE REAL DATA ###
             df["timestamp"] = pd.to_datetime(df["timestamp"])
             df = df.set_index("timestamp")
             self.merged_obj[pair] = df
@@ -140,9 +140,8 @@ class ArbDiff:
     # =============================================================================
     # Format timestamps and such
     # =============================================================================
-    def save_diff_dfs_to_s3(self):
+    def save_diff_dfs_to_s3(self, today):
         for pair, df in self.merged_obj.items():
-            today = convert_timestamp_to_today_date(df.index[0])
             path = f"Difference/{today}/{pair}_{today}.csv"
             csv_buffer = StringIO()
             df.to_csv(csv_buffer)
@@ -152,10 +151,10 @@ class ArbDiff:
             pprint(response)
 
             # 1. s3 object
-            # 2. today
-            # 3. exchange_pair
-            # 4. market
-            # 5. bucket name
+            # 2. today (x)
+            # 3. exchange_pair (x)
+            # 4. market (x)
+            # 5. bucket name (x)
 
 
 if __name__ == "__main__":

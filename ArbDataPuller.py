@@ -29,7 +29,8 @@ from utils.time_helpers import (
     determine_if_new_day,
     sleep_to_desired_interval,
 )
-from utils.discord_webhook import determine_exchange_diff_and_alert_discord
+from utils.DiscordAlert import DiscordAlert
+
 from ArbDiff import ArbDiff
 
 # =============================================================================
@@ -73,6 +74,7 @@ class ArbDataPuller:
         self.interval = interval
         self.S3_BASE_PATHS = self.determine_general_s3_filepaths()
         self.s3 = s3
+        self.Discord = DiscordAlert()
         self.ArbDiff = ArbDiff(self.exchanges, self.market)
 
     # =============================================================================
@@ -81,24 +83,31 @@ class ArbDataPuller:
     def main(self):
         self.reset_for_new_day()
         sleep_to_desired_interval(self.interval)
-        # while True:
-        for i in range(6):
-            # if determine_if_new_day(self.midnight):
-            if i == 5:
-                self.prepare_df_obj_for_s3()
-                print("saving")
-                self.save_updated_data_to_s3()
-                self.reset_for_new_day()
+        while True:
+            if determine_if_new_day(self.midnight):
+                self.handle_midnight_event()
             self.get_bid_ask_and_process_df()
             sleep_to_desired_interval(self.interval)
+
+    # =============================================================================
+    # It's midnight! Save important data and reset for next day
+    # =============================================================================
+    def handle_midnight_event(self):
+        self.prepare_df_obj_for_s3()
+        self.save_updated_data_to_s3()
+        self.ArbDiff.main(self.df_obj, self.today)
+        self.reset_for_new_day()
 
     # =============================================================================
     # Get bid ask data and update dataframe obj for all exchanges
     # =============================================================================
     def get_bid_ask_and_process_df(self) -> dict:
         bid_asks = self.get_bid_ask_from_exchanges()
-        determine_exchange_diff_and_alert_discord(bid_asks)
         self.update_df_obj_with_new_bid_ask_data(bid_asks)
+        jprint("HERE: ", bid_asks)
+        quit()
+        # determine_exchange_diff_and_alert_discord(bid_asks)
+
         jprint(self.df_obj)
 
     # =============================================================================
@@ -228,9 +237,8 @@ class ArbDataPuller:
             if exchange not in self.df_obj:
                 df = self.create_new_df_with_bid_ask(bid_ask)
             else:
-                df = self.append_existing_df_with_bid_ask(
-                    bid_ask, self.df_obj[exchange]
-                )
+                cur_df = self.df_obj[exchange]
+                df = self.append_existing_df_with_bid_ask(bid_ask, cur_df)
             self.df_obj[exchange] = df
 
     # =============================================================================
@@ -270,10 +278,10 @@ class ArbDataPuller:
             print(path)
             csv_buffer = StringIO()
             df.to_csv(csv_buffer)
-            # response = s3.put_object(
-            #     Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
-            # )
-            # jprint(response)
+            response = s3.put_object(
+                Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
+            )
+            jprint(response)
 
     # =============================================================================
     # Create filesnames for today's date (date in filename!)
