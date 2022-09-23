@@ -4,6 +4,7 @@
 from discord import SyncWebhook
 from utils.decimal_helper import dec
 from utils.jprint import jprint
+from utils.time_helpers import determine_cur_utc_timestamp, convert_datetime_str_to_obj
 
 DISCORD_URL = "https://discord.com/api/webhooks/1022260697037541457/sH6v5xoDBSykaEyn1W91GtesMVC6PurG8ksESCbwR5VlxXi9FXFWlrc-OmnHQzA7RBWN"
 
@@ -59,15 +60,29 @@ class DiscordAlert:
     # Determine the current minimum threshold
     # =============================================================================
     def determine_cur_threshold(self, pair: str):
-        thresh_d = self.thresholds[pair]
-        if not thresh_d["low"]["surpassed"]:
+        threshs = self.thresholds[pair]
+        if not threshs["low"]["surpassed"]:
             return "low"
-        elif not thresh_d["mid"]["surpassed"]:
+        elif not threshs["mid"]["surpassed"]:
             return "mid"
-        elif not thresh_d["high"]["surpassed"]:
+        elif not threshs["high"]["surpassed"]:
             return "high"
         else:
             return "surpassed_all"
+
+    # =============================================================================
+    # Determine the current minimum threshold
+    # =============================================================================
+    def check_if_thresh_active(self, threshs: dict, level: str):
+        surpassed = threshs[level]["surpassed"]  # has this thresh been activated
+        last_triggered = threshs[level]["timestamp"]
+        if last_triggered is None:
+            return surpassed
+        now = determine_cur_utc_timestamp()
+        minutes_apart = ((now - last_triggered).seconds) / 60
+
+        ### CONTINUE HERE!!!
+        return surpassed or minutes_apart < 60
 
     # =============================================================================
     # Check if difference goes above
@@ -136,9 +151,9 @@ class DiscordAlert:
         thresholds = {}
         for pair in self.diff_pairs:
             thresh = {
-                "low": {"value": 1, "surpassed": False},
-                "mid": {"value": 5, "surpassed": False},
-                "high": {"value": 10, "surpassed": False},
+                "low": {"value": 1, "surpassed": False, "timestamp": None},
+                "mid": {"value": 5, "surpassed": False, "timestamp": None},
+                "high": {"value": 10, "surpassed": False, "timestamp": None},
             }
             thresholds[pair] = thresh
         return thresholds
