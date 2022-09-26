@@ -352,5 +352,5 @@ class ArbDataPuller:
 if __name__ == "__main__":
     # to active venv: source venv/bin/activate
     exchanges_obj = {"FTX_US": "ETH/USD", "DYDX": "ETH-USD"}
-    obj = ArbDataPuller(exchanges_obj=exchanges_obj, interval=5)
+    obj = ArbDataPuller(exchanges_obj=exchanges_obj, interval=60)
     obj.main()
