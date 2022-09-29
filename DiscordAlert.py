@@ -5,12 +5,8 @@ import traceback
 from discord import SyncWebhook
 from utils.decimal_helper import dec
 from utils.jprint import jprint
-from utils.time_helpers import (
-    determine_cur_utc_timestamp,
-    convert_datetime_str_to_obj,
-    convert_sec_to_min,
-)
-
+from utils.time_helpers import determine_cur_utc_timestamp
+from utils.discord_hook import post_msgs_to_discord
 
 # =============================================================================
 # CONSTANTS
@@ -22,8 +18,11 @@ SECS_PER_HOUR = 60 * 60
 # This class check bid_ask data for exchange arbitrage opportunities and send to Discord
 # =============================================================================
 class DiscordAlert:
-    def __init__(self, diff_pairs):
+    def __init__(self, diff_pairs, market, interval):
         self.diff_pairs = diff_pairs
+        self.market = market
+        self.interval = interval
+
         self.thresholds = {p: {"value": 1, "timestamp": None} for p in diff_pairs}
         self.thresh_reset_time = SECS_PER_HOUR
         self.thresh_incr = 5  # $$$-terms used to upwards increment thresh
@@ -34,7 +33,8 @@ class DiscordAlert:
     def determine_exchange_diff_and_alert_discord(self, bid_asks: dict):
         try:
             msgs = self.determine_exchange_diff(bid_asks)
-            self.post_msg_to_discord(msgs)
+            if len(msgs) > 0:
+                post_msgs_to_discord(DISCORD_URL, msgs)
         except Exception as e:
             traceback.print_exc()
             print(f"Disord webhook failed with this message: {e}")
@@ -89,22 +89,13 @@ class DiscordAlert:
     # Format message for discord webhook
     # =============================================================================
     def format_msg_for_discord(self, pair: str, diff: float):
+        ex0, ex1 = pair.split("-")
         thresh_val = self.thresholds[pair]["value"]
-        msg0 = f"ALERT (semi-testing): Arbitrage opportunity.\n"
-        msg1 = f"Diff surpassed threshold of: ${thresh_val}\n"
-        msg2 = f"Price difference between {pair} is: ${diff}"
-        return msg0 + msg1 + msg2
-
-    # =============================================================================
-    # Post messages to discord
-    # =============================================================================
-    def post_msg_to_discord(self, msgs):
-        webhook = SyncWebhook.from_url(DISCORD_URL)
-        if type(msgs) is str:
-            webhook.send(msgs)
-        elif type(msgs) is list:
-            for msg in msgs:
-                webhook.send(msg)
+        msg0 = f"ALERT: Arbitrage opportunity.\n"
+        msg1 = f"{ex0} & {ex1} trading {self.market} at interval {self.interval} seconds:\n"
+        msg2 = f"Diff surpassed threshold of: ${thresh_val}\n"
+        msg3 = f"Price difference between {pair} is: ${diff}"
+        return msg0 + msg1 + msg2 + msg3
 
     # =============================================================================
     # Reset thresholds
@@ -113,19 +104,19 @@ class DiscordAlert:
         self.thresholds[pair] = {"value": 1, "timestamp": None}
 
 
-if __name__ == "__main__":
-    disc = DiscordAlert(["DYDX-FTX_US"])
-    bid_asks = [
-        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-        {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-    ]
-    for b_a in bid_asks:
-        disc.determine_exchange_diff_and_alert_discord(b_a)
+# if __name__ == "__main__":
+#     disc = DiscordAlert(["DYDX-FTX_US"], "ETH-USD", 30)
+#     bid_asks = [
+#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
+#         {"DYDX": {"mid": 25}, "FTX_US": {"mid": 10}},
+#     ]
+#     for b_a in bid_asks:
+#         disc.determine_exchange_diff_and_alert_discord(b_a)

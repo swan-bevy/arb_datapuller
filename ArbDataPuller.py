@@ -31,7 +31,7 @@ from utils.time_helpers import (
 )
 
 from DiscordAlert import DiscordAlert
-from ArbDiff import ArbDiff
+from EodDiff import EodDiff
 
 # =============================================================================
 # AWS CONFIG
@@ -75,8 +75,8 @@ class ArbDataPuller:
         self.interval = interval
         self.S3_BASE_PATHS = self.determine_general_s3_filepaths()
         self.s3 = s3
-        self.Discord = DiscordAlert(self.diff_pairs)
-        self.ArbDiff = ArbDiff(self.diff_pairs, self.market)
+        self.Discord = DiscordAlert(self.diff_pairs, self.market, self.interval)
+        self.EodDiff = EodDiff(self.diff_pairs, self.market, self.interval)
 
     # =============================================================================
     # Get market data for exchanges, iterate infinitely
@@ -95,7 +95,7 @@ class ArbDataPuller:
     # =============================================================================
     def handle_midnight_event(self):
         self.save_updated_data_to_s3()
-        self.ArbDiff.main(self.df_obj, self.today)
+        self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
 
     # =============================================================================
@@ -352,5 +352,5 @@ class ArbDataPuller:
 if __name__ == "__main__":
     # to active venv: source venv/bin/activate
     exchanges_obj = {"FTX_US": "ETH/USD", "DYDX": "ETH-USD"}
-    obj = ArbDataPuller(exchanges_obj=exchanges_obj, interval=60)
+    obj = ArbDataPuller(exchanges_obj=exchanges_obj, interval=30)
     obj.main()

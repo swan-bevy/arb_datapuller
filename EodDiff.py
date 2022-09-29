@@ -2,14 +2,14 @@
 # IMPORTS
 # =============================================================================
 import pandas as pd
-import datetime as dt
 import os, traceback
 import boto3
 import glob
 from io import StringIO
 from pprint import pprint
-from utils.time_helpers import convert_timestamp_to_today_date
+from utils.jprint import jprint
 from dotenv import load_dotenv
+from utils.discord_hook import post_msgs_to_discord
 
 load_dotenv()
 
@@ -30,6 +30,7 @@ s3 = boto3.client(
 INPUT_PATH = "/Users/julian/Documents/arb_datapuller/diff_data"  # delete
 FILES = glob.glob(os.path.join(INPUT_PATH, "*.csv"))  # delete
 BUCKET_NAME = "arb-live-data"
+DISCORD_URL = "https://discord.com/api/webhooks/1022260697037541457/sH6v5xoDBSykaEyn1W91GtesMVC6PurG8ksESCbwR5VlxXi9FXFWlrc-OmnHQzA7RBWN"
 
 # =============================================================================
 # ISSUES:
@@ -41,21 +42,23 @@ BUCKET_NAME = "arb-live-data"
 # Determine bid/ask differences between exchanges
 # CAUTION: Differentiate between (original) df_obj & (processed) merged_obj!!!
 # =============================================================================
-class ArbDiff:
-    def __init__(self, diff_pairs, market):
+class EodDiff:
+    def __init__(self, diff_pairs, market, interval):
         self.diff_pairs = diff_pairs
         self.market = market
+        self.interval = interval
 
     # =============================================================================
-    # bla bla
+    # Compute diffs between exchanges, save to S3 and send summary to Discord
     # =============================================================================
-    def main(self, df_obj: dict, today: str):
+    def determine_eod_diff_n_create_summary(self, df_obj: dict, today: str):
         try:
             self.merge_dfs_for_pairs(df_obj)
             self.compute_price_diffs()
             self.reorder_df_columns()
             self.prepare_diff_dfs_for_s3()
             self.save_diff_dfs_to_s3(today)
+            self.create_n_send_summary_to_discord(today)
         except Exception as e:
             traceback.print_exc()
             print(f"ArbDiff failed execution with error message: {e}")
@@ -141,13 +144,42 @@ class ArbDiff:
             )
             pprint(response)
 
+    # =============================================================================
+    # Make message and send to discord
+    # =============================================================================
+    def create_n_send_summary_to_discord(self, today):
+        msgs = []
+        date = today.split(" ")[0]
+        for pair, df in self.merged_obj.items():
+            diff = df[f"{pair}_mid"]
+            info = {"pair": pair, "date": date}
+            info["max_diff"] = diff.max()
+            info["min_diff"] = diff.min()
+            info["mean_diff"] = round(diff.mean(), 2)
+            msg = self.format_msg_for_discord(info)
+            msgs.append(msg)
+        post_msgs_to_discord(DISCORD_URL, msgs)
 
-if __name__ == "__main__":
-    df_obj = {}
-    for file in FILES:
-        exchange = file.split("/")[-1].split("-")[0]
-        df = pd.read_csv(file)
-        df_obj[exchange] = df
+    # =============================================================================
+    # Format msg with info
+    # =============================================================================
+    def format_msg_for_discord(self, info):
+        ex0, ex1 = info["pair"].split("-")
+        msg0 = f"End of day: {info['date']} UTC.\n"
+        msg1 = f"{ex0} & {ex1} trading {self.market} at interval {self.interval} seconds:\n"
+        msg2 = f" - Max diff: ${info['max_diff']}\n"
+        msg3 = f" - Min diff: ${info['min_diff']}\n"
+        msg4 = f" - Mean diff: ${info['mean_diff']}\n"
+        msg5 = f"================================="
+        return msg0 + msg1 + msg2 + msg3 + msg4 + msg5
 
-    obj = ArbDiff(df_obj)
-    obj.main()
+
+# if __name__ == "__main__":
+#     df_obj = {}
+#     for file in FILES:
+#         exchange = file.split("/")[-1].split("-")[0]
+#         df = pd.read_csv(file)
+#         df_obj[exchange] = df
+
+#     obj = EodDiff(["DYDX-FTX_US"], "ETH-USD", 30)
+#     obj.determine_eod_diff_n_create_summary(df_obj, "2022-01-01 00:00:00")
