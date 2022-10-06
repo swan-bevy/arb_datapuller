@@ -109,6 +109,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+ec2-arb-stats.pem
+*.pem
 
 # Spyder project settings
 .spyderproject
