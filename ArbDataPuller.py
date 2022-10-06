@@ -7,13 +7,11 @@ from io import StringIO
 import datetime as dt
 from dotenv import load_dotenv
 import requests
-from dydx3 import Client
+import dydx3
 import pandas as pd
 import numpy as np
 import concurrent.futures
 from itertools import repeat
-
-from sympy import EX
 
 
 # =============================================================================
@@ -160,7 +158,7 @@ class ArbDataPuller:
     # =============================================================================
     def get_bid_ask_dydx(self, market: str) -> dict:
         try:
-            client = Client(host=DYDX_BASEURL)
+            client = dydx3.Client(host=DYDX_BASEURL)
             res = client.public.get_orderbook(market=market).data
             bid_ask = self.pull_best_bid_ask_from_orderbook(res, "DYDX")
         except Exception as e:
