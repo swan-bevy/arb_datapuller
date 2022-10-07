@@ -23,9 +23,9 @@ class DiscordAlert:
         self.market = market
         self.interval = interval
 
-        self.thresholds = {p: {"value": 1, "timestamp": None} for p in diff_pairs}
+        self.thresholds = {p: {"value": 0.15, "timestamp": None} for p in diff_pairs}
         self.thresh_reset_time = SECS_PER_HOUR
-        self.thresh_incr = 5  # $$$-terms used to upwards increment thresh
+        self.thresh_incr = 0.15  # $$$-terms used to upwards increment thresh
 
     # =============================================================================
     # Check $$$ diff between exchanges and alert discord if sufficient.
@@ -49,7 +49,7 @@ class DiscordAlert:
             bid_ask0, bid_ask1 = bid_asks[ex0], bid_asks[ex1]
             diff = self.compute_price_diff(bid_ask0, bid_ask1)
             cur_thresh = self.check_thresh_and_reset_if_necessary(pair)
-            if cur_thresh["value"] < diff:
+            if cur_thresh["value"] < diff["pct"]:
                 msg = self.format_msg_for_discord(pair, diff)
                 msgs.append(msg)
                 self.increase_and_update_threshold(pair)
@@ -59,9 +59,11 @@ class DiscordAlert:
     # Compute difference between prices, correctly formatted and rounded
     # =============================================================================
     def compute_price_diff(self, bid_ask0: dict, bid_ask1: dict):
-        mid0, mid1 = bid_ask0["mid"], bid_ask1["mid"]
-        diff = abs(dec(mid0) - dec(mid1))
-        return float(diff)
+        mid0, mid1 = dec(bid_ask0["mid"]), dec(bid_ask1["mid"])
+        abs_diff = abs(mid0 - mid1)
+        avg = (mid0 + mid1) / 2
+        pct_diff = abs_diff / avg * 100
+        return {"abs": float(round(abs_diff, 2)), "pct": float(round(pct_diff, 2))}
 
     # =============================================================================
     # Check current thresh and reset if time is up
@@ -93,9 +95,10 @@ class DiscordAlert:
         thresh_val = self.thresholds[pair]["value"]
         msg0 = f"ALERT: Arbitrage opportunity.\n"
         msg1 = f"{ex0} & {ex1} trading {self.market} at interval {self.interval} seconds:\n"
-        msg2 = f"Diff surpassed threshold of: ${thresh_val}\n"
-        msg3 = f"Price difference between {pair} is: ${diff}"
-        return msg0 + msg1 + msg2 + msg3
+        msg2 = f"Diff surpassed % threshold of: {thresh_val}%\n"
+        msg3 = f"Percentage price difference: {diff['pct']}%\n"
+        msg4 = f"Absolute price difference: ${diff['abs']}"
+        return msg0 + msg1 + msg2 + msg3 + msg4
 
     # =============================================================================
     # Reset thresholds

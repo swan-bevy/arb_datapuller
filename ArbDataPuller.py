@@ -1,7 +1,7 @@
 # =============================================================================
 # IMPORTS
 # =============================================================================
-import os, sys
+import os, sys, json
 import boto3
 from io import StringIO
 import datetime as dt
@@ -65,12 +65,13 @@ DYDX_BASEURL = "https://api.dydx.exchange"  # No "/" at end!
 # Pull bid/ask from exchanges, save to S3 at midnight
 # =============================================================================
 class ArbDataPuller:
-    def __init__(self, exchanges_obj: dict, interval: int):
+    def __init__(self, exchanges_obj: dict):
         self.exchanges_obj = exchanges_obj
+        self.interval = self.ask_user_for_interval()
+
         self.exchanges = self.make_list_of_exchanges(exchanges_obj)
         self.diff_pairs = self.create_unique_exchange_pairs()
         self.market = self.determine_market()
-        self.interval = interval
         self.S3_BASE_PATHS = self.determine_general_s3_filepaths()
         self.s3 = s3
         self.Discord = DiscordAlert(self.diff_pairs, self.market, self.interval)
@@ -346,9 +347,20 @@ class ArbDataPuller:
         self.midnight = determine_next_midnight()
         self.df_obj = {}
 
+    # =============================================================================
+    # Ask user for interval on how often to fetch bid/ask
+    # =============================================================================
+    def ask_user_for_interval(self):
+        inp = int(input("Specify the desired interval in seconds: ").strip())
+        if inp < 5:
+            raise ValueError("Interval is too small. Execution cancelled.")
+        return inp
+
 
 if __name__ == "__main__":
     # to active venv: source venv/bin/activate
-    exchanges_obj = {"FTX_US": "ETH/USD", "DYDX": "ETH-USD"}
-    obj = ArbDataPuller(exchanges_obj=exchanges_obj, interval=30)
+    # '{"FTX_US": "ETH/USD", "DYDX": "ETH-USD"}'
+
+    exchanges_obj = json.loads(sys.argv[1])
+    obj = ArbDataPuller(exchanges_obj=exchanges_obj)
     obj.main()
