@@ -359,7 +359,7 @@ class ArbDataPuller:
 
 if __name__ == "__main__":
     # to active venv: source venv/bin/activate
-    # '{"FTX_US": "ETH/USD", "DYDX": "ETH-USD"}'
+    # '{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}'
 
     exchanges_obj = json.loads(sys.argv[1])
     obj = ArbDataPuller(exchanges_obj=exchanges_obj)
