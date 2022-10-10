@@ -6,8 +6,10 @@ import datetime as dt
 from dotenv import load_dotenv
 import requests
 import dydx3
+from binance.spot import Spot as BinanceSpot
 import pandas as pd
 import numpy as np
+import traceback
 
 
 # =============================================================================
@@ -34,8 +36,9 @@ from utils.constants import FTX_BASEURL, DYDX_BASEURL, BUCKET_NAME
 # Pull bid/ask from exchanges, save to S3 at midnight
 # =============================================================================
 class GetBidAsks:
-    def __init__(self, market):
-        self.market = market
+    def __init__(self):
+        self.dydx_client = dydx3.Client(host=DYDX_BASEURL)
+        self.binance_client = BinanceSpot()
 
     # =============================================================================
     # Determine the exchange and run function
@@ -44,42 +47,50 @@ class GetBidAsks:
         self, exchange_and_market: tuple, now: dt
     ) -> dict:
         exchange, market = exchange_and_market[0], exchange_and_market[1]
-        if exchange == "FTX_US":
-            bid_ask = self.get_bid_ask_ftx(market)
-        elif exchange == "DYDX":
-            bid_ask = self.get_bid_ask_dydx(market)
-        else:
-            raise Exception("No function exists for this exchange.")
+
+        try:
+            bid_ask = self.determine_exch_n_get_data(exchange, market)
+        except Exception as e:
+            self.log_exception(exchange, e)
+            bid_ask = self.create_nan_bid_ask_dict()
 
         bid_ask["timestamp"] = now
         bid_ask["mid"] = self.compute_mid(bid_ask)
         return exchange, bid_ask
 
     # =============================================================================
+    # Determine which exchange, and fetch data
+    # =============================================================================
+    def determine_exch_n_get_data(self, exchange, market):
+        if exchange == "FTX_US":
+            res = self.get_bid_ask_ftx_us(market)
+        elif exchange == "DYDX":
+            res = self.get_bid_ask_dydx(market)
+        elif exchange == "BINANCE":
+            res = self.get_bid_ask_binance(market)
+        else:
+            raise Exception("No function exists for this exchange.")
+        bid_ask = self.pull_best_bid_ask_from_orderbook(res, exchange)
+        return bid_ask
+
+    # =============================================================================
     # Get bid/ask market data for Ftx_Us
     # =============================================================================
-    def get_bid_ask_ftx(self, market: str) -> dict:
-        try:
-            url = f"{FTX_BASEURL}{market}/orderbook"
-            res = requests.get(url).json()["result"]
-            bid_ask = self.pull_best_bid_ask_from_orderbook(res, "FTX_US")
-        except Exception as e:
-            print(f"Exception raised in get_bid_ask_ftx(): {e}")
-            bid_ask = self.create_nan_bid_ask_dict()
-        return bid_ask
+    def get_bid_ask_ftx_us(self, market: str) -> dict:
+        url = f"{FTX_BASEURL}{market}/orderbook"
+        return requests.get(url).json()["result"]
 
     # =============================================================================
     # Get bid/ask market data for DyDx
     # =============================================================================
     def get_bid_ask_dydx(self, market: str) -> dict:
-        try:
-            client = dydx3.Client(host=DYDX_BASEURL)
-            res = client.public.get_orderbook(market=market).data
-            bid_ask = self.pull_best_bid_ask_from_orderbook(res, "DYDX")
-        except Exception as e:
-            print(f"Exception raised in get_bid_ask_dydx(): {e}")
-            bid_ask = self.create_nan_bid_ask_dict()
-        return bid_ask
+        return self.dydx_client.public.get_orderbook(market=market).data
+
+    # =============================================================================
+    # Get bid/ask market data for Binance
+    # =============================================================================
+    def get_bid_ask_binance(self, market: str) -> dict:
+        return self.binance_client.depth(symbol=market)
 
     # =============================================================================
     # Pull best bid/ask for DyDx, verify it's sorted correctly
@@ -88,15 +99,13 @@ class GetBidAsks:
         asks, bids = res["asks"], res["bids"]
         if exchange == "DYDX":
             asks = pd.DataFrame(asks)
-            asks["price"] = pd.to_numeric(asks["price"])
-            asks["size"] = pd.to_numeric(asks["size"])
             bids = pd.DataFrame(bids)
-            bids["price"] = pd.to_numeric(bids["price"])
-            bids["size"] = pd.to_numeric(bids["size"])
-
-        if exchange == "FTX_US":
+        if exchange in ["FTX_US", "BINANCE"]:
             asks = pd.DataFrame(asks, columns=["price", "size"])
             bids = pd.DataFrame(bids, columns=["price", "size"])
+
+        asks = self.convert_column_to_numeric(asks)
+        bids = self.convert_column_to_numeric(bids)
 
         best_ask = asks.iloc[asks["price"].idxmin()]
         best_bid = bids.iloc[bids["price"].idxmax()]
@@ -108,6 +117,14 @@ class GetBidAsks:
         }
         self.error_check_bid_ask_orderbook(bid_ask, exchange, asks, bids)
         return bid_ask
+
+    # =============================================================================
+    # Some exchanges return strings, convert to numeric
+    # =============================================================================
+    def convert_column_to_numeric(self, df):
+        df["price"] = pd.to_numeric(df["price"])
+        df["size"] = pd.to_numeric(df["size"])
+        return df
 
     # =============================================================================
     # Error check the bid ask orderbook to check for irregularities
@@ -138,3 +155,18 @@ class GetBidAsks:
             "bid_price": np.nan,
             "bid_size": np.nan,
         }
+
+    # =============================================================================
+    # Log exception to concole when data fetching from exchange fails
+    # =============================================================================
+    def log_exception(self, exchange, err):
+        print("\n\n")
+        traceback.print_exc()
+        print(f"\n\nError getting data for {exchange}: {err}\n\n")
+
+    # =============================================================================
+    # Compute mid between ask and bid_ask
+    # =============================================================================
+    def compute_mid(self, bid_ask: dict) -> float:
+        mid = (bid_ask["ask_price"] + bid_ask["bid_price"]) / 2
+        return round(mid, 3)

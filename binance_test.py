@@ -1,6 +1,6 @@
-from binance.spot import Spot
+from binance.spot import Spot as BinanceSpot
 from pprint import pprint
 
-binance = Spot()
+binance = BinanceSpot()
 
-pprint(binance.depth("BTCUSDT"))
+pprint(binance.depth(symbol="BTCUSDT"))

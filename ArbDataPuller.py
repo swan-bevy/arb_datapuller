@@ -59,17 +59,17 @@ s3 = boto3.client(
 # Pull bid/ask from exchanges, save to S3 at midnight
 # =============================================================================
 class ArbDataPuller:
-    def __init__(self, exchanges_obj: dict):
+    def __init__(self, market: str, exchanges_obj: dict):
+        self.market = self.check_market(market)
         self.exchanges_obj = exchanges_obj
         self.interval = self.ask_user_for_interval()
 
         self.exchanges = self.make_list_of_exchanges(exchanges_obj)
         self.diff_pairs = self.create_unique_exchange_pairs()
-        self.market = self.determine_market()
         self.S3_BASE_PATHS = self.determine_general_s3_filepaths()
         self.s3 = s3
 
-        self.GetBidAsks = GetBidAsks(self.market)
+        self.GetBidAsks = GetBidAsks()
         self.Discord = DiscordAlert(self.diff_pairs, self.market, self.interval)
         self.EodDiff = EodDiff(self.diff_pairs, self.market, self.interval)
 
@@ -82,7 +82,7 @@ class ArbDataPuller:
         # while True:
         # if determine_if_new_day(self.midnight):
         for i in range(10):
-            if i == 9:
+            if i == 3:
                 self.handle_midnight_event()
             self.get_bid_ask_and_process_df_and_test_diff()
             sleep_to_desired_interval(self.interval)
@@ -91,6 +91,13 @@ class ArbDataPuller:
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
+        ### temporary if clause to prevent duplicate saving (hence data loss for)
+        if self.today != "2022-10-10":
+            self.reset_for_new_day()  # must come last!
+            print(f"NOT SAVING ANYTHING FOR {self.today}")
+            return
+        ### remove after 2022-10-10
+
         self.save_updated_data_to_s3()
         self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
@@ -112,7 +119,7 @@ class ArbDataPuller:
         now = determine_cur_utc_timestamp()
         with concurrent.futures.ThreadPoolExecutor() as executor:
             result = executor.map(
-                self.get_bid_ask_from_specific_exchange,
+                self.GetBidAsks.get_bid_ask_from_specific_exchange,
                 self.exchanges_obj.items(),
                 repeat(now),
             )
@@ -120,108 +127,6 @@ class ArbDataPuller:
                 exchange, bid_ask = r
                 bid_asks[exchange] = bid_ask
         return bid_asks
-
-    # =============================================================================
-    # Determine the exchange and run function
-    # =============================================================================
-    def get_bid_ask_from_specific_exchange(
-        self, exchange_and_market: tuple, now: dt
-    ) -> dict:
-        exchange, market = exchange_and_market[0], exchange_and_market[1]
-        if exchange == "FTX_US":
-            bid_ask = self.get_bid_ask_ftx(market)
-        elif exchange == "DYDX":
-            bid_ask = self.get_bid_ask_dydx(market)
-        else:
-            raise Exception("No function exists for this exchange.")
-
-        bid_ask["timestamp"] = now
-        bid_ask["mid"] = self.compute_mid(bid_ask)
-        return exchange, bid_ask
-
-    # =============================================================================
-    # Get bid/ask market data for Ftx_Us
-    # =============================================================================
-    def get_bid_ask_ftx(self, market: str) -> dict:
-        try:
-            url = f"{FTX_BASEURL}{market}/orderbook"
-            res = requests.get(url).json()["result"]
-            bid_ask = self.pull_best_bid_ask_from_orderbook(res, "FTX_US")
-        except Exception as e:
-            print(f"Exception raised in get_bid_ask_ftx(): {e}")
-            bid_ask = self.create_nan_bid_ask_dict()
-        return bid_ask
-
-    # =============================================================================
-    # Get bid/ask market data for DyDx
-    # =============================================================================
-    def get_bid_ask_dydx(self, market: str) -> dict:
-        try:
-            client = dydx3.Client(host=DYDX_BASEURL)
-            res = client.public.get_orderbook(market=market).data
-            bid_ask = self.pull_best_bid_ask_from_orderbook(res, "DYDX")
-        except Exception as e:
-            print(f"Exception raised in get_bid_ask_dydx(): {e}")
-            bid_ask = self.create_nan_bid_ask_dict()
-        return bid_ask
-
-    # =============================================================================
-    # Pull best bid/ask for DyDx, verify it's sorted correctly
-    # =============================================================================
-    def pull_best_bid_ask_from_orderbook(self, res: list, exchange: str) -> tuple:
-        asks, bids = res["asks"], res["bids"]
-        if exchange == "DYDX":
-            asks = pd.DataFrame(asks)
-            asks["price"] = pd.to_numeric(asks["price"])
-            asks["size"] = pd.to_numeric(asks["size"])
-            bids = pd.DataFrame(bids)
-            bids["price"] = pd.to_numeric(bids["price"])
-            bids["size"] = pd.to_numeric(bids["size"])
-
-        if exchange == "FTX_US":
-            asks = pd.DataFrame(asks, columns=["price", "size"])
-            bids = pd.DataFrame(bids, columns=["price", "size"])
-
-        best_ask = asks.iloc[asks["price"].idxmin()]
-        best_bid = bids.iloc[bids["price"].idxmax()]
-        bid_ask = {
-            "ask_price": best_ask["price"],
-            "ask_size": best_ask["size"],
-            "bid_price": best_bid["price"],
-            "bid_size": best_bid["size"],
-        }
-        self.error_check_bid_ask_orderbook(bid_ask, exchange, asks, bids)
-        return bid_ask
-
-    # =============================================================================
-    # Error check the bid ask orderbook to check for irregularities
-    # =============================================================================
-    def error_check_bid_ask_orderbook(
-        self, bid_ask: dict, exchange: str, asks: list, bids: list
-    ):
-        # error checking
-        if bid_ask["ask_price"] != asks.iloc[0]["price"]:
-            print(f"{exchange} order book messed up: \n {asks}")
-            raise Exception(f"{exchange} order book messed up: \n {asks}")
-        if bid_ask["bid_price"] != float(bids.iloc[0]["price"]):
-            print(f"{exchange} order book messed up: \n {bids}")
-            raise Exception(f"{exchange} order book messed up: \n {bids}")
-
-        diff = (bid_ask["ask_price"] / bid_ask["bid_price"] - 1) * 100
-        if diff > 5:
-            print(f"Warning, bid_ask diff is larger than 5%: {diff}.")
-            print(f"This is unrelated to inter-exchange difference.")
-
-    # =============================================================================
-    # If exchange doesn't return proper data, create nan dictionary
-    # =============================================================================
-    def create_nan_bid_ask_dict(self) -> dict:
-        return {
-            "ask_price": np.nan,
-            "ask_size": np.nan,
-            "bid_price": np.nan,
-            "bid_size": np.nan,
-        }
 
     # =============================================================================
     # If no data frame exists, create dataframe
@@ -246,13 +151,6 @@ class ArbDataPuller:
     # =============================================================================
     def append_existing_df_with_bid_ask(self, bid_ask, df):
         return pd.concat([df, pd.DataFrame([bid_ask])], ignore_index=True)
-
-    # =============================================================================
-    # Compute mid between ask and bid_ask
-    # =============================================================================
-    def compute_mid(self, bid_ask: dict) -> float:
-        mid = (bid_ask["ask_price"] + bid_ask["bid_price"]) / 2
-        return round(mid, 3)
 
     # =============================================================================
     # Save the updated df to S3
@@ -313,19 +211,10 @@ class ArbDataPuller:
         return exchanges
 
     # =============================================================================
-    # Determine market and make uniform (e.g. ETH/USD => ETH-USD)
+    # Ask user for universalized market notation (since it deviates from exchange to exchange)
     # =============================================================================
-    def determine_market(self):
-        symbols = []
-        for market in self.exchanges_obj.values():
-            if "/" in market:
-                market = market.replace("/", "-")
-            elif "_" in market:
-                market = market.replace("_", "-")
-            symbols.append(market)
-        if all([x == symbols[0] for x in symbols]):
-            return symbols[0]
-        raise Exception(f"Inproperly formatted market. {symbols}")
+    def ask_user_for_market(self):
+        pass
 
     # =============================================================================
     # Get all relevant filepaths to fetch and save data to
@@ -354,14 +243,23 @@ class ArbDataPuller:
             raise ValueError("Interval is too small. Execution cancelled.")
         return inp
 
+    # =============================================================================
+    # Make sure standardized market input has a valid format
+    # =============================================================================
+    def check_market(self, market):
+        if "-" not in market or not market.isupper():
+            raise ValueError("Invalid market format. Should be like so: `BTC-USD`.")
+        return market
+
 
 if __name__ == "__main__":
     # to active venv: source venv/bin/activate
-    # '{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}'
-    if len(sys.argv) < 2:
+    # BTC-USD '{"FTX_US": "BTC/USD", "DYDX": "BTC-USD", "BINANCE": "BTCUSDT"}'
+    if len(sys.argv) < 3:
         raise Exception(
             'Need to enter exchanges dict like so: \'{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}\''
         )
-    exchanges_obj = json.loads(sys.argv[1])
-    obj = ArbDataPuller(exchanges_obj=exchanges_obj)
+    market = sys.argv[1]
+    exchanges_obj = json.loads(sys.argv[2])
+    obj = ArbDataPuller(market=market, exchanges_obj=exchanges_obj)
     obj.main()
