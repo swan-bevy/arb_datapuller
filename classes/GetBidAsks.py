@@ -18,7 +18,7 @@ import traceback
 load_dotenv()
 sys.path.append(os.path.abspath("./utils"))
 from utils.jprint import jprint
-from utils.constants import FTX_BASEURL, DYDX_BASEURL, BUCKET_NAME
+from utils.constants import FTX_BASEURL, DYDX_BASEURL, OKX_BASEURL, BUCKET_NAME
 
 
 # =============================================================================
@@ -68,9 +68,11 @@ class GetBidAsks:
             res = self.get_bid_ask_dydx(market)
         elif exchange == "BINANCE":
             res = self.get_bid_ask_binance(market)
+        elif exchange == "OKX":
+            res = self.get_bid_ask_okx(market)
         else:
             raise Exception("No function exists for this exchange.")
-        bid_ask = self.pull_best_bid_ask_from_orderbook(res, exchange)
+        bid_ask = self.process_orderbook_res_from_ex(res, exchange)
         return bid_ask
 
     # =============================================================================
@@ -93,19 +95,23 @@ class GetBidAsks:
         return self.binance_client.depth(symbol=market)
 
     # =============================================================================
+    # Get bid/ask market data for OkX
+    # =============================================================================
+    def get_bid_ask_okx(self, market: str) -> dict:
+        url = f"{OKX_BASEURL}api/v5/market/books?instId={market}&sz=5"
+        res = requests.get(url).json()["data"]
+        if len(res) > 1:
+            raise Exception(f"OKX returned more than one orderbook: {res}")
+        res = res[0]
+        res["asks"] = [r[0:2] for r in res["asks"]]
+        res["bids"] = [r[0:2] for r in res["bids"]]
+        return res
+
+    # =============================================================================
     # Pull best bid/ask for DyDx, verify it's sorted correctly
     # =============================================================================
-    def pull_best_bid_ask_from_orderbook(self, res: list, exchange: str) -> tuple:
-        asks, bids = res["asks"], res["bids"]
-        if exchange == "DYDX":
-            asks = pd.DataFrame(asks)
-            bids = pd.DataFrame(bids)
-        if exchange in ["FTX_US", "BINANCE"]:
-            asks = pd.DataFrame(asks, columns=["price", "size"])
-            bids = pd.DataFrame(bids, columns=["price", "size"])
-
-        asks = self.convert_column_to_numeric(asks)
-        bids = self.convert_column_to_numeric(bids)
+    def process_orderbook_res_from_ex(self, res: list, exchange: str) -> tuple:
+        asks, bids = self.convert_orderbook_to_df(res, exchange)
 
         best_ask = asks.iloc[asks["price"].idxmin()]
         best_bid = bids.iloc[bids["price"].idxmax()]
@@ -117,6 +123,24 @@ class GetBidAsks:
         }
         self.error_check_bid_ask_orderbook(bid_ask, exchange, asks, bids)
         return bid_ask
+
+    # =============================================================================
+    # Pull data out of res and process to dataframe considering exchange specifics
+    # =============================================================================
+    def convert_orderbook_to_df(self, res, exchange):
+        asks, bids = res["asks"], res["bids"]
+        if exchange == "DYDX":
+            asks = pd.DataFrame(asks)
+            bids = pd.DataFrame(bids)
+        elif exchange in ["FTX_US", "BINANCE"]:
+            asks = pd.DataFrame(asks, columns=["price", "size"])
+            bids = pd.DataFrame(bids, columns=["price", "size"])
+        elif exchange == "OKX":
+            asks = pd.DataFrame(asks, columns=["price", "size"])
+            bids = pd.DataFrame(bids, columns=["price", "size"])
+        asks = self.convert_column_to_numeric(asks)
+        bids = self.convert_column_to_numeric(bids)
+        return asks, bids
 
     # =============================================================================
     # Some exchanges return strings, convert to numeric

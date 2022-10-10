@@ -9,7 +9,7 @@ def jprint(*arg):
     if len(arg) == 0:
         print()
     for ar in arg:
-        if ar == "":
+        if type(ar) is str and len(ar) == 0:  # ar == ""
             print()
         elif type(ar) is str or type(ar) is int:
             print(ar)
@@ -23,6 +23,8 @@ def jprint(*arg):
                 [print(item) for sublist in ar for item in sublist]
             else:
                 pp(ar)
+        elif type(ar) is pd.DataFrame:
+            print(ar)
         else:
             pp(ar)
     print()

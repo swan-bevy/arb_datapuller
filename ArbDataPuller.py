@@ -82,7 +82,7 @@ class ArbDataPuller:
         # while True:
         # if determine_if_new_day(self.midnight):
         for i in range(10):
-            if i == 3:
+            if i == 9:
                 self.handle_midnight_event()
             self.get_bid_ask_and_process_df_and_test_diff()
             sleep_to_desired_interval(self.interval)
@@ -109,6 +109,7 @@ class ArbDataPuller:
         bid_asks = self.get_bid_ask_from_exchanges()
         self.update_df_obj_with_new_bid_ask_data(bid_asks)
         self.Discord.determine_exchange_diff_and_alert_discord(bid_asks)
+        print("=========================================\n")
         jprint(self.df_obj)
 
     # =============================================================================
@@ -254,7 +255,7 @@ class ArbDataPuller:
 
 if __name__ == "__main__":
     # to active venv: source venv/bin/activate
-    # BTC-USD '{"FTX_US": "BTC/USD", "DYDX": "BTC-USD", "BINANCE": "BTCUSDT"}'
+    # ETH-USD '{"FTX_US": "ETH/USD", "DYDX": "ETH-USD", "BINANCE": "ETHUSDT", "OKX": "ETH-USDT"}'
     if len(sys.argv) < 3:
         raise Exception(
             'Need to enter exchanges dict like so: \'{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}\''
