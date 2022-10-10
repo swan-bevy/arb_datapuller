@@ -1,6 +1,7 @@
 # =============================================================================
 # IMPORTS
 # =============================================================================
+from cmath import pi
 import pandas as pd
 import os, traceback
 import boto3
@@ -10,6 +11,7 @@ from pprint import pprint
 from utils.jprint import jprint
 from dotenv import load_dotenv
 from utils.discord_hook import post_msgs_to_discord
+from utils.constants import BUCKET_NAME, DISCORD_URL
 
 load_dotenv()
 
@@ -24,13 +26,6 @@ s3 = boto3.client(
     aws_secret_access_key=AWS_SECRET_KEY,
     region_name="eu-central-1",
 )
-# =============================================================================
-# CONSTANTS
-# =============================================================================
-INPUT_PATH = "/Users/julian/Documents/arb_datapuller/diff_data"  # delete
-FILES = glob.glob(os.path.join(INPUT_PATH, "*.csv"))  # delete
-BUCKET_NAME = "arb-live-data"
-DISCORD_URL = "https://discord.com/api/webhooks/1022260697037541457/sH6v5xoDBSykaEyn1W91GtesMVC6PurG8ksESCbwR5VlxXi9FXFWlrc-OmnHQzA7RBWN"
 
 # =============================================================================
 # ISSUES:
@@ -135,8 +130,10 @@ class EodDiff:
     # Format timestamps and such
     # =============================================================================
     def save_diff_dfs_to_s3(self, today):
-        for pair, df in self.merged_obj.items():
-            path = f"Difference/{today}/{pair}_{today}.csv"
+        base = f"Difference/{self.market}/{today}"
+        for ex_pair, df in self.merged_obj.items():
+            path = f"{base}/{ex_pair}_{self.market}_{today}.csv"
+            jprint("EOD PATH: ", path)
             csv_buffer = StringIO()
             df.to_csv(csv_buffer)
             response = s3.put_object(
@@ -151,35 +148,55 @@ class EodDiff:
         msgs = []
         date = today.split(" ")[0]
         for pair, df in self.merged_obj.items():
-            diff = df[f"{pair}_mid"]
-            info = {"pair": pair, "date": date}
-            info["max_diff"] = diff.max()
-            info["min_diff"] = diff.min()
-            info["mean_diff"] = round(diff.mean(), 2)
+            pprint(df)
+            info = self.determine_eod_vals(date, pair, df)
             msg = self.format_msg_for_discord(info)
             msgs.append(msg)
+            jprint(msg)
         post_msgs_to_discord(DISCORD_URL, msgs)
+
+    # =============================================================================
+    # Determine vals like max, min, mean for EOD summary
+    # =============================================================================
+    def determine_eod_vals(self, date: str, pair: str, df: pd.DataFrame):
+        ex0, ex1 = pair.split("-")
+        diff_col = f"{pair}_mid"
+        info = {"pair": pair, "date": date}
+
+        _max = df.loc[df[diff_col].idxmax()]
+        info["max_abs"] = _max[diff_col]
+        info["max_perc"] = self.compute_perc_diff(diff_col, _max, ex0, ex1)
+
+        _min = df.loc[df[diff_col].idxmin()]
+        info["min_abs"] = _min[diff_col]
+        info["min_perc"] = self.compute_perc_diff(diff_col, _min, ex0, ex1)
+
+        info["mean_abs"] = round(df[diff_col].mean(), 2)
+        return info
 
     # =============================================================================
     # Format msg with info
     # =============================================================================
     def format_msg_for_discord(self, info):
         ex0, ex1 = info["pair"].split("-")
+
         msg0 = f"End of day: {info['date']} UTC.\n"
         msg1 = f"{ex0} & {ex1} trading {self.market} at interval {self.interval} seconds:\n"
-        msg2 = f" - Max diff: ${info['max_diff']}\n"
-        msg3 = f" - Min diff: ${info['min_diff']}\n"
-        msg4 = f" - Mean diff: ${info['mean_diff']}\n"
-        msg5 = f"================================="
-        return msg0 + msg1 + msg2 + msg3 + msg4 + msg5
 
+        msg2 = f" - Max diff absolute: ${info['max_abs']}\n"
+        msg3 = f" - Max diff percentage: {info['max_perc']}%\n"
 
-# if __name__ == "__main__":
-#     df_obj = {}
-#     for file in FILES:
-#         exchange = file.split("/")[-1].split("-")[0]
-#         df = pd.read_csv(file)
-#         df_obj[exchange] = df
+        msg4 = f" - Min diff absolute: ${info['min_abs']}\n"
+        msg5 = f" - Min diff percentage: {info['min_perc']}%\n"
 
-#     obj = EodDiff(["DYDX-FTX_US"], "ETH-USD", 30)
-#     obj.determine_eod_diff_n_create_summary(df_obj, "2022-01-01 00:00:00")
+        msg6 = f" - Mean diff absolute: ${info['mean_abs']}\n"
+        msg_div = f"=================================\n"
+        return msg_div + msg0 + msg1 + msg2 + msg3 + msg4 + msg5 + msg6 + msg_div
+
+    # =============================================================================
+    # Compute mean on mid prices
+    # =============================================================================
+    def compute_perc_diff(self, diff_col, row, ex0, ex1):
+        diff_abs = row[diff_col]
+        _mean = (row[f"{ex0}_mid"] + row[f"{ex1}_mid"]) / 2
+        return round(diff_abs / _mean * 100, 3)

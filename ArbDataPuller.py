@@ -27,7 +27,7 @@ from utils.time_helpers import (
     determine_if_new_day,
     sleep_to_desired_interval,
 )
-
+from utils.constants import FTX_BASEURL, DYDX_BASEURL, BUCKET_NAME
 from DiscordAlert import DiscordAlert
 from EodDiff import EodDiff
 
@@ -53,13 +53,6 @@ s3 = boto3.client(
 #   4. Error checker exception isn't thrown, since it's in try/catch
 # =============================================================================
 
-# =============================================================================
-# CONSTANTS
-# =============================================================================
-BUCKET_NAME = "arb-live-data"
-FTX_BASEURL = "https://ftx.us/api/markets/"
-DYDX_BASEURL = "https://api.dydx.exchange"  # No "/" at end!
-
 
 # =============================================================================
 # Pull bid/ask from exchanges, save to S3 at midnight
@@ -83,8 +76,10 @@ class ArbDataPuller:
     def main(self):
         self.reset_for_new_day()
         sleep_to_desired_interval(self.interval)
-        while True:
-            if determine_if_new_day(self.midnight):
+        # while True:
+        # if determine_if_new_day(self.midnight):
+        for i in range(10):
+            if i == 9:
                 self.handle_midnight_event()
             self.get_bid_ask_and_process_df_and_test_diff()
             sleep_to_desired_interval(self.interval)
@@ -360,7 +355,10 @@ class ArbDataPuller:
 if __name__ == "__main__":
     # to active venv: source venv/bin/activate
     # '{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}'
-
+    if len(sys.argv) < 2:
+        raise Exception(
+            'Need to enter exchanges dict like so: \'{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}\''
+        )
     exchanges_obj = json.loads(sys.argv[1])
     obj = ArbDataPuller(exchanges_obj=exchanges_obj)
     obj.main()

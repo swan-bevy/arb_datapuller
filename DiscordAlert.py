@@ -7,12 +7,7 @@ from utils.decimal_helper import dec
 from utils.jprint import jprint
 from utils.time_helpers import determine_cur_utc_timestamp
 from utils.discord_hook import post_msgs_to_discord
-
-# =============================================================================
-# CONSTANTS
-# =============================================================================
-DISCORD_URL = "https://discord.com/api/webhooks/1022260697037541457/sH6v5xoDBSykaEyn1W91GtesMVC6PurG8ksESCbwR5VlxXi9FXFWlrc-OmnHQzA7RBWN"
-SECS_PER_HOUR = 60 * 60
+from utils.constants import DISCORD_URL, SECS_PER_HOUR
 
 # =============================================================================
 # This class check bid_ask data for exchange arbitrage opportunities and send to Discord
@@ -105,21 +100,3 @@ class DiscordAlert:
     # =============================================================================
     def reset_thresold(self, pair):
         self.thresholds[pair] = {"value": 1, "timestamp": None}
-
-
-# if __name__ == "__main__":
-#     disc = DiscordAlert(["DYDX-FTX_US"], "ETH-USD", 30)
-#     bid_asks = [
-#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-#         {"DYDX": {"mid": 15}, "FTX_US": {"mid": 10}},
-#         {"DYDX": {"mid": 25}, "FTX_US": {"mid": 10}},
-#     ]
-#     for b_a in bid_asks:
-#         disc.determine_exchange_diff_and_alert_discord(b_a)
