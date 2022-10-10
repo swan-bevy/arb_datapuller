@@ -79,10 +79,8 @@ class ArbDataPuller:
     def main(self):
         self.reset_for_new_day()
         sleep_to_desired_interval(self.interval)
-        # while True:
-        # if determine_if_new_day(self.midnight):
-        for i in range(10):
-            if i == 9:
+        while True:
+            if determine_if_new_day(self.midnight):
                 self.handle_midnight_event()
             self.get_bid_ask_and_process_df_and_test_diff()
             sleep_to_desired_interval(self.interval)
@@ -91,13 +89,6 @@ class ArbDataPuller:
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
-        ### temporary if clause to prevent duplicate saving (hence data loss for)
-        if self.today != "2022-10-10":
-            self.reset_for_new_day()  # must come last!
-            print(f"NOT SAVING ANYTHING FOR {self.today}")
-            return
-        ### remove after 2022-10-10
-
         self.save_updated_data_to_s3()
         self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
@@ -160,13 +151,14 @@ class ArbDataPuller:
         for exchange, df in self.df_obj.items():
             df = self.prepare_df_for_s3(df)
             path = self.update_cur_s3_filepath(self.S3_BASE_PATHS[exchange])
-            print(path)
             csv_buffer = StringIO()
             df.to_csv(csv_buffer)
             response = s3.put_object(
                 Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
             )
-            jprint(response)
+            print(
+                f"{path} saved with status code: {response['ResponseMetadata']['HTTPStatusCode']}"
+            )
 
     # =============================================================================
     # Preare the final df_obj to be save to S3
@@ -254,6 +246,7 @@ class ArbDataPuller:
 
 
 if __name__ == "__main__":
+    # to activate EC2: ssh -i "ec2-arb-stats.pem" ec2-user@ec2-3-120-243-216.eu-central-1.compute.amazonaws.com
     # to active venv: source venv/bin/activate
     # ETH-USD '{"FTX_US": "ETH/USD", "DYDX": "ETH-USD", "BINANCE": "ETHUSDT", "OKX": "ETH-USDT"}'
     if len(sys.argv) < 3:

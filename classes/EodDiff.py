@@ -133,27 +133,27 @@ class EodDiff:
         base = f"Difference/{self.market}/{today}"
         for ex_pair, df in self.merged_obj.items():
             path = f"{base}/{ex_pair}_{self.market}_{today}.csv"
-            jprint("EOD PATH: ", path)
             csv_buffer = StringIO()
             df.to_csv(csv_buffer)
             response = s3.put_object(
                 Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
             )
-            pprint(response)
+            print(
+                f"{path} saved with status code: {response['ResponseMetadata']['HTTPStatusCode']}"
+            )
 
     # =============================================================================
     # Make message and send to discord
     # =============================================================================
     def create_n_send_summary_to_discord(self, today):
-        msgs = []
+        self.msg = f"End of day: {today} UTC.\n"
         date = today.split(" ")[0]
         for pair, df in self.merged_obj.items():
-            pprint(df)
             info = self.determine_eod_vals(date, pair, df)
-            msg = self.format_msg_for_discord(info)
-            msgs.append(msg)
-            jprint(msg)
-        post_msgs_to_discord(DISCORD_URL, msgs)
+            self.format_msg_for_discord(info)
+        jprint(self.msg)
+        quit()
+        post_msgs_to_discord(DISCORD_URL, self.msg)
 
     # =============================================================================
     # Determine vals like max, min, mean for EOD summary
@@ -180,7 +180,6 @@ class EodDiff:
     def format_msg_for_discord(self, info):
         ex0, ex1 = info["pair"].split("-")
 
-        msg0 = f"End of day: {info['date']} UTC.\n"
         msg1 = f"{ex0} & {ex1} trading {self.market} at interval {self.interval} seconds:\n"
 
         msg2 = f" - Max diff absolute: ${info['max_abs']}\n"
@@ -190,8 +189,9 @@ class EodDiff:
         msg5 = f" - Min diff percentage: {info['min_perc']}%\n"
 
         msg6 = f" - Mean diff absolute: ${info['mean_abs']}\n"
-        msg_div = f"=================================\n"
-        return msg_div + msg0 + msg1 + msg2 + msg3 + msg4 + msg5 + msg6 + msg_div
+        msg_div = f"\n=================================\n\n"
+        pair_msg = msg_div + msg1 + msg2 + msg3 + msg4 + msg5 + msg6
+        self.msg += pair_msg
 
     # =============================================================================
     # Compute mean on mid prices
