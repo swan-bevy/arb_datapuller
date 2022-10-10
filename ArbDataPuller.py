@@ -28,8 +28,9 @@ from utils.time_helpers import (
     sleep_to_desired_interval,
 )
 from utils.constants import FTX_BASEURL, DYDX_BASEURL, BUCKET_NAME
-from DiscordAlert import DiscordAlert
-from EodDiff import EodDiff
+from classes.GetBidAsks import GetBidAsks
+from classes.DiscordAlert import DiscordAlert
+from classes.EodDiff import EodDiff
 
 # =============================================================================
 # AWS CONFIG
@@ -67,6 +68,8 @@ class ArbDataPuller:
         self.market = self.determine_market()
         self.S3_BASE_PATHS = self.determine_general_s3_filepaths()
         self.s3 = s3
+
+        self.GetBidAsks = GetBidAsks(self.market)
         self.Discord = DiscordAlert(self.diff_pairs, self.market, self.interval)
         self.EodDiff = EodDiff(self.diff_pairs, self.market, self.interval)
 
