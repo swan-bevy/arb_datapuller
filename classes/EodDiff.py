@@ -151,8 +151,6 @@ class EodDiff:
         for pair, df in self.merged_obj.items():
             info = self.determine_eod_vals(date, pair, df)
             self.format_msg_for_discord(info)
-        jprint(self.msg)
-        quit()
         post_msgs_to_discord(DISCORD_URL, self.msg)
 
     # =============================================================================
