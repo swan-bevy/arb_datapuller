@@ -77,6 +77,7 @@ class ArbDataPuller:
     # Get market data for exchanges, iterate infinitely
     # =============================================================================
     def main(self):
+        print("MAKE SURE THRESHS ARE APPROPRIATE!")
         self.reset_for_new_day()
         sleep_to_desired_interval(self.interval)
         while True:

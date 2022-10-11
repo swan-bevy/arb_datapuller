@@ -18,7 +18,7 @@ class DiscordAlert:
         self.diff_pairs = diff_pairs
         self.market = market
         self.interval = interval
-        self.thresh_base = {"value": 0.11, "timestamp": None}
+        self.thresh_base = {"value": 0.1, "timestamp": None}
         self.thresholds = {p: deepcopy(self.thresh_base) for p in diff_pairs}
         self.thresh_reset_time = SECS_PER_HOUR
         self.thresh_incr = 0.1  # $$$-terms used to upwards increment thresh
@@ -30,6 +30,7 @@ class DiscordAlert:
         try:
             msgs = self.determine_exchange_diff(bid_asks)
             if len(msgs) > 0:
+                jprint(msgs)
                 post_msgs_to_discord(DISCORD_URL, msgs)
         except Exception as e:
             traceback.print_exc()
