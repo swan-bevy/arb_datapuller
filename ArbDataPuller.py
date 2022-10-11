@@ -79,8 +79,6 @@ class ArbDataPuller:
     def main(self):
         print("MAKE SURE THRESHS ARE APPROPRIATE!")
         self.reset_for_new_day()
-        print(self.today)
-        quit()
         sleep_to_desired_interval(self.interval)
         while True:
             if determine_if_new_day(self.midnight):
