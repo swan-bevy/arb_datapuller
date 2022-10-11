@@ -18,9 +18,9 @@ class DiscordAlert:
         self.market = market
         self.interval = interval
 
-        self.thresholds = {p: {"value": 0.15, "timestamp": None} for p in diff_pairs}
+        self.thresholds = {p: {"value": 0.11, "timestamp": None} for p in diff_pairs}
         self.thresh_reset_time = SECS_PER_HOUR
-        self.thresh_incr = 0.15  # $$$-terms used to upwards increment thresh
+        self.thresh_incr = 0.1  # $$$-terms used to upwards increment thresh
 
     # =============================================================================
     # Check $$$ diff between exchanges and alert discord if sufficient.
@@ -39,7 +39,6 @@ class DiscordAlert:
     # =============================================================================
     def determine_exchange_diff(self, bid_asks: list):
         msgs = []
-        jprint("Thresh: ", self.thresholds)
         for pair in self.diff_pairs:
             ex0, ex1 = pair.split("-")
             bid_ask0, bid_ask1 = bid_asks[ex0], bid_asks[ex1]
