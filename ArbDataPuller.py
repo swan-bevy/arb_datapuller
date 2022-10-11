@@ -100,8 +100,8 @@ class ArbDataPuller:
         bid_asks = self.get_bid_ask_from_exchanges()
         self.update_df_obj_with_new_bid_ask_data(bid_asks)
         self.Discord.determine_exchange_diff_and_alert_discord(bid_asks)
-        # print("=========================================\n")
-        # jprint(self.df_obj)
+        print("=========================================\n")
+        jprint(self.df_obj)
 
     # =============================================================================
     # Get current bid ask data from exchange using THREADDING

@@ -39,11 +39,10 @@ class DiscordAlert:
     # =============================================================================
     def determine_exchange_diff(self, bid_asks: list):
         msgs = []
-        jprint("All: ", self.thresholds)
+        jprint("Thresh: ", self.thresholds)
         for pair in self.diff_pairs:
             ex0, ex1 = pair.split("-")
             bid_ask0, bid_ask1 = bid_asks[ex0], bid_asks[ex1]
-            jprint("pair: ", pair)
             diff = self.compute_price_diff(bid_ask0, bid_ask1)
             cur_thresh = self.check_thresh_and_reset_if_necessary(pair)
             if cur_thresh["value"] < diff["pct"]:
@@ -60,7 +59,6 @@ class DiscordAlert:
         abs_diff = abs(mid0 - mid1)
         avg = (mid0 + mid1) / 2
         pct_diff = abs_diff / avg * 100
-        print(mid0, mid1, pct_diff)
         return {"abs": float(round(abs_diff, 2)), "pct": float(round(pct_diff, 2))}
 
     # =============================================================================
