@@ -8,6 +8,7 @@ from utils.jprint import jprint
 from utils.time_helpers import determine_cur_utc_timestamp
 from utils.discord_hook import post_msgs_to_discord
 from utils.constants import DISCORD_URL, SECS_PER_HOUR
+from copy import deepcopy
 
 # =============================================================================
 # This class check bid_ask data for exchange arbitrage opportunities and send to Discord
@@ -17,8 +18,8 @@ class DiscordAlert:
         self.diff_pairs = diff_pairs
         self.market = market
         self.interval = interval
-
-        self.thresholds = {p: {"value": 0.11, "timestamp": None} for p in diff_pairs}
+        self.thresh_base = {"value": 0.11, "timestamp": None}
+        self.thresholds = {p: deepcopy(self.thresh_base) for p in diff_pairs}
         self.thresh_reset_time = SECS_PER_HOUR
         self.thresh_incr = 0.1  # $$$-terms used to upwards increment thresh
 
@@ -39,6 +40,7 @@ class DiscordAlert:
     # =============================================================================
     def determine_exchange_diff(self, bid_asks: list):
         msgs = []
+        jprint("Thresh: ", self.thresholds)
         for pair in self.diff_pairs:
             ex0, ex1 = pair.split("-")
             bid_ask0, bid_ask1 = bid_asks[ex0], bid_asks[ex1]
@@ -99,4 +101,4 @@ class DiscordAlert:
     # Reset thresholds
     # =============================================================================
     def reset_thresold(self, pair):
-        self.thresholds[pair] = {"value": 1, "timestamp": None}
+        self.thresholds[pair] = deepcopy(self.thresh_base)
