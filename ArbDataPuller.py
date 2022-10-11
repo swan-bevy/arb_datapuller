@@ -79,6 +79,8 @@ class ArbDataPuller:
     def main(self):
         print("MAKE SURE THRESHS ARE APPROPRIATE!")
         self.reset_for_new_day()
+        print(self.today)
+        quit()
         sleep_to_desired_interval(self.interval)
         while True:
             if determine_if_new_day(self.midnight):
@@ -90,6 +92,10 @@ class ArbDataPuller:
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
+        if self.today == "2022-10-11":
+            self.reset_for_new_day()
+            return
+
         self.save_updated_data_to_s3()
         self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
