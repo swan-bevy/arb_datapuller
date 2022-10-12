@@ -2,6 +2,7 @@
 # IMPORTS
 # =============================================================================
 import traceback
+from decimal import Decimal
 from discord import SyncWebhook
 from utils.decimal_helper import dec
 from utils.jprint import jprint
@@ -18,8 +19,10 @@ class DiscordAlert:
         self.diff_pairs = diff_pairs
         self.market = market
         self.interval = interval
-        self.thresh_base = {"value": 0.1, "timestamp": None}
+
+        self.thresh_base = self.generate_thresh_base_dict()
         self.thresholds = {p: deepcopy(self.thresh_base) for p in diff_pairs}
+
         self.thresh_reset_time = SECS_PER_HOUR
         self.thresh_incr = 0.1  # $$$-terms used to upwards increment thresh
 
@@ -43,21 +46,29 @@ class DiscordAlert:
         msgs = []
         jprint("Thresh: ", self.thresholds)
         for pair in self.diff_pairs:
-            ex0, ex1 = pair.split("-")
-            bid_ask0, bid_ask1 = bid_asks[ex0], bid_asks[ex1]
-            diff = self.compute_price_diff(bid_ask0, bid_ask1)
+            mids = self.extract_mid_prices(bid_asks, pair)
+            diff = self.compute_price_diff(mids)
             cur_thresh = self.check_thresh_and_reset_if_necessary(pair)
             if cur_thresh["value"] < diff["pct"]:
-                msg = self.format_msg_for_discord(pair, diff)
+                msg = self.format_msg_for_discord(pair, mids, diff)
                 msgs.append(msg)
                 self.increase_and_update_threshold(pair)
         return msgs
 
     # =============================================================================
+    # Extract mid prices from bid_ask dict
+    # =============================================================================
+    def extract_mid_prices(self, bid_asks: dict, pair: str) -> dict:
+        ex0, ex1 = pair.split("-")
+        mid0 = dec(bid_asks[ex0]["mid"])
+        mid1 = dec(bid_asks[ex1]["mid"])
+        return {ex0: mid0, ex1: mid1}
+
+    # =============================================================================
     # Compute difference between prices, correctly formatted and rounded
     # =============================================================================
-    def compute_price_diff(self, bid_ask0: dict, bid_ask1: dict):
-        mid0, mid1 = dec(bid_ask0["mid"]), dec(bid_ask1["mid"])
+    def compute_price_diff(self, mids: dict):
+        mid0, mid1 = list(mids.values())
         abs_diff = abs(mid0 - mid1)
         avg = (mid0 + mid1) / 2
         pct_diff = abs_diff / avg * 100
@@ -88,18 +99,26 @@ class DiscordAlert:
     # =============================================================================
     # Format message for discord webhook
     # =============================================================================
-    def format_msg_for_discord(self, pair: str, diff: float):
+    def format_msg_for_discord(self, pair: str, mids: dict, diff: float):
         ex0, ex1 = pair.split("-")
         thresh_val = self.thresholds[pair]["value"]
         msg0 = f"ALERT: Arbitrage opportunity.\n"
         msg1 = f"{ex0} & {ex1} trading {self.market} at interval {self.interval} seconds:\n"
         msg2 = f"Diff surpassed % threshold of: {thresh_val}%\n"
         msg3 = f"Percentage price difference: {diff['pct']}%\n"
-        msg4 = f"Absolute price difference: ${diff['abs']}"
-        return msg0 + msg1 + msg2 + msg3 + msg4
+        msg4 = f"Absolute price difference: ${diff['abs']}\n"
+        msg5 = f"{ex0}-price: {mids[ex0]}, {ex1}-price: {mids[ex1]}\n"
+        return msg0 + msg1 + msg2 + msg3 + msg4 + msg5
 
     # =============================================================================
     # Reset thresholds
     # =============================================================================
     def reset_thresold(self, pair):
         self.thresholds[pair] = deepcopy(self.thresh_base)
+
+    # =============================================================================
+    # Ask user for threshold base value in percent
+    # =============================================================================
+    def generate_thresh_base_dict(self):
+        val = input("Enter the Discord alert (%) threshold base value: ")
+        return {"value": float(val), "timestamp": None}

@@ -90,7 +90,7 @@ class ArbDataPuller:
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
-        if self.today == "2022-10-11":
+        if self.today == "2022-10-12":
             self.reset_for_new_day()
             return
 
