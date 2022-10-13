@@ -22,9 +22,9 @@ class DiscordAlert:
 
         self.thresh_base = self.generate_thresh_base_dict()
         self.thresholds = {p: deepcopy(self.thresh_base) for p in diff_pairs}
-
+        self.thresh_incr = self.ask_for_thresh_incrementer()
+        self.max_bid_ask_spread = 0.2
         self.thresh_reset_time = SECS_PER_HOUR
-        self.thresh_incr = 0.1  # $$$-terms used to upwards increment thresh
 
     # =============================================================================
     # Check $$$ diff between exchanges and alert discord if sufficient.
@@ -46,14 +46,28 @@ class DiscordAlert:
         msgs = []
         jprint("Thresh: ", self.thresholds)
         for pair in self.diff_pairs:
+            if self.check_if_orderbook_is_loose(bid_asks, pair):
+                continue
             mids = self.extract_mid_prices(bid_asks, pair)
             diff = self.compute_price_diff(mids)
             cur_thresh = self.check_thresh_and_reset_if_necessary(pair)
+
             if cur_thresh["value"] < diff["pct"]:
                 msg = self.format_msg_for_discord(pair, mids, diff)
                 msgs.append(msg)
                 self.increase_and_update_threshold(pair)
         return msgs
+
+    # =============================================================================
+    # Check if the bid-ask spread is tight
+    # =============================================================================
+    def check_if_orderbook_is_loose(self, bid_asks: dict, pair: str):
+        for ex in pair.split("-"):
+            bid, ask = bid_asks[ex]["bid_price"], bid_asks[ex]["ask_price"]
+            diff = abs(bid - ask) / bid * 100
+            if diff > self.max_bid_ask_spread:
+                return True  # orderbook loose
+        return False  # orderbook is tight
 
     # =============================================================================
     # Extract mid prices from bid_ask dict
@@ -72,7 +86,7 @@ class DiscordAlert:
         abs_diff = abs(mid0 - mid1)
         avg = (mid0 + mid1) / 2
         pct_diff = abs_diff / avg * 100
-        return {"abs": float(round(abs_diff, 2)), "pct": float(round(pct_diff, 2))}
+        return {"abs": float(round(abs_diff, 3)), "pct": float(round(pct_diff, 3))}
 
     # =============================================================================
     # Check current thresh and reset if time is up
@@ -92,7 +106,7 @@ class DiscordAlert:
     # =============================================================================
     def increase_and_update_threshold(self, pair):
         val = self.thresholds[pair]["value"]
-        new_val = (val // self.thresh_incr) * self.thresh_incr + self.thresh_incr
+        new_val = dec(val) + dec(self.thresh_incr)
         new_timestamp = determine_cur_utc_timestamp()
         self.thresholds[pair] = {"value": new_val, "timestamp": new_timestamp}
 
@@ -101,7 +115,7 @@ class DiscordAlert:
     # =============================================================================
     def format_msg_for_discord(self, pair: str, mids: dict, diff: float):
         ex0, ex1 = pair.split("-")
-        thresh_val = self.thresholds[pair]["value"]
+        thresh_val = round(self.thresholds[pair]["value"], 2)
         msg0 = f"ALERT: Arbitrage opportunity.\n"
         msg1 = f"{ex0} & {ex1} trading {self.market} at interval {self.interval} seconds:\n"
         msg2 = f"Diff surpassed % threshold of: {thresh_val}%\n"
@@ -122,3 +136,10 @@ class DiscordAlert:
     def generate_thresh_base_dict(self):
         val = input("Enter the Discord alert (%) threshold base value: ")
         return {"value": float(val), "timestamp": None}
+
+    # =============================================================================
+    # Ask user for threshold incrementer
+    # =============================================================================
+    def ask_for_thresh_incrementer(self):
+        val = input("Enter the Discord alert (%) threshold INCREMENTER: ")
+        return float(val)
