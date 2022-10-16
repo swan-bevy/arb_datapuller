@@ -66,6 +66,7 @@ class DiscordAlert:
             bid, ask = bid_asks[ex]["bid_price"], bid_asks[ex]["ask_price"]
             diff = abs(bid - ask) / bid * 100
             if diff > self.max_bid_ask_spread:
+                print("Loose orderbook. ")
                 return True  # orderbook loose
         return False  # orderbook is tight
 
