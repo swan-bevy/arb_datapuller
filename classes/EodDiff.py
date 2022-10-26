@@ -14,7 +14,6 @@ from utils.discord_hook import post_msgs_to_discord
 from utils.constants import BUCKET_NAME, DISCORD_URL
 
 load_dotenv()
-
 # =============================================================================
 # AWS CONFIG
 # =============================================================================
