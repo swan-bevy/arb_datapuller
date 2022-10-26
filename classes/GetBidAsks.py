@@ -58,7 +58,6 @@ class GetBidAsks:
         exchange, market = exchange_and_market[0], exchange_and_market[1]
         try:
             bid_ask = self.determine_exch_n_get_data(exchange, market)
-            x = 5 / 0
         except Exception as e:
             logging.error(
                 f"Exception occurred with {market} at {exchange}", exc_info=True

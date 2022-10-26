@@ -90,8 +90,9 @@ class ArbDataPuller:
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
-        self.save_updated_data_to_s3()
-        self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
+        if self.today != "2022-10-26":
+            self.save_updated_data_to_s3()
+            self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
 
     # =============================================================================
