@@ -11,6 +11,15 @@ import pandas as pd
 import numpy as np
 import traceback
 
+# =============================================================================
+# LOGGING
+# =============================================================================
+import logging
+
+logging.basicConfig(
+    format="%(asctime)s - %(message)s", filename="logs/exchange_errors.log"
+)
+
 
 # =============================================================================
 # FILE IMPORTS
@@ -47,10 +56,13 @@ class GetBidAsks:
         self, exchange_and_market: tuple, now: dt
     ) -> dict:
         exchange, market = exchange_and_market[0], exchange_and_market[1]
-
         try:
             bid_ask = self.determine_exch_n_get_data(exchange, market)
         except Exception as e:
+            logging.error(
+                f"Exception occurred with {market} at {exchange}", exc_info=True
+            )
+
             self.log_exception(exchange, e)
             bid_ask = self.create_nan_bid_ask_dict()
 

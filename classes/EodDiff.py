@@ -89,9 +89,9 @@ class EodDiff:
     def compute_price_diffs(self):
         for pair, df in self.merged_obj.items():
             ex0, ex1 = pair.split("-")
-            df[f"{pair}_ask"] = (df[f"{ex0}_ask"] - df[f"{ex1}_ask"]).abs().round(2)
-            df[f"{pair}_bid"] = (df[f"{ex0}_bid"] - df[f"{ex1}_bid"]).abs().round(2)
-            df[f"{pair}_mid"] = (df[f"{ex0}_mid"] - df[f"{ex1}_mid"]).abs().round(2)
+            df[f"{pair}_ask"] = (df[f"{ex0}_ask"] - df[f"{ex1}_ask"]).abs().round(3)
+            df[f"{pair}_bid"] = (df[f"{ex0}_bid"] - df[f"{ex1}_bid"]).abs().round(3)
+            df[f"{pair}_mid"] = (df[f"{ex0}_mid"] - df[f"{ex1}_mid"]).abs().round(3)
             self.merged_obj[pair] = df
 
     # =============================================================================
@@ -103,14 +103,14 @@ class EodDiff:
             df = df[
                 [
                     "timestamp",
-                    f"{ex0}_ask",
-                    f"{ex1}_ask",
-                    f"{pair}_ask",
                     f"{ex0}_bid",
-                    f"{ex1}_bid",
-                    f"{pair}_bid",
+                    f"{ex0}_ask",
                     f"{ex0}_mid",
+                    f"{ex1}_bid",
+                    f"{ex1}_ask",
                     f"{ex1}_mid",
+                    f"{pair}_bid",
+                    f"{pair}_ask",
                     f"{pair}_mid",
                 ]
             ]
