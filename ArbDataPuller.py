@@ -80,8 +80,10 @@ class ArbDataPuller:
         print("MAKE SURE THRESHS ARE APPROPRIATE!")
         self.reset_for_new_day()
         sleep_to_desired_interval(self.interval)
-        while True:
-            if determine_if_new_day(self.midnight):
+        # while True:
+        #     if determine_if_new_day(self.midnight):
+        for i in range(10):
+            if i == 9:
                 self.handle_midnight_event()
             self.get_bid_ask_and_process_df_and_test_diff()
             sleep_to_desired_interval(self.interval)
