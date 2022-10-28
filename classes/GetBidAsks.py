@@ -17,7 +17,7 @@ import traceback
 import logging
 
 logging.basicConfig(
-    format="%(asctime)s - %(message)s", filename="logs/exchange_errors.log"
+    format="\n\n%(asctime)s - %(message)s", filename="logs/exchange_errors.log"
 )
 
 
