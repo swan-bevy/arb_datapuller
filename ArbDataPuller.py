@@ -27,7 +27,7 @@ from utils.time_helpers import (
     determine_if_new_day,
     sleep_to_desired_interval,
 )
-from utils.constants import FTX_BASEURL, DYDX_BASEURL, BUCKET_NAME
+from utils.constants import BUCKET_NAME
 from classes.GetBidAsks import GetBidAsks
 from classes.DiscordAlert import DiscordAlert
 from classes.EodDiff import EodDiff
@@ -90,8 +90,8 @@ class ArbDataPuller:
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
-        if self.today != "2022-10-27":
-            self.save_updated_data_to_s3()
+        if self.today != "2022-11-08":
+            self.save_raw_bid_ask_data_to_s3()
             self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
 
@@ -149,7 +149,7 @@ class ArbDataPuller:
     # =============================================================================
     # Save the updated df to S3
     # =============================================================================
-    def save_updated_data_to_s3(self) -> None:
+    def save_raw_bid_ask_data_to_s3(self) -> None:
         for exchange, df in self.df_obj.items():
             df = self.prepare_df_for_s3(df)
             path = self.update_cur_s3_filepath(self.S3_BASE_PATHS[exchange])
@@ -168,6 +168,7 @@ class ArbDataPuller:
     def prepare_df_for_s3(self, df) -> dict:
         df = df.set_index("timestamp")
         df.index = pd.to_datetime(df.index).tz_localize(None)
+        df = df[["bid_price", "ask_price", "bid_size", "ask_size", "mid"]]
         return df
 
     # =============================================================================
@@ -250,7 +251,7 @@ class ArbDataPuller:
 if __name__ == "__main__":
     # to activate EC2: ssh -i "ec2-arb-stats.pem" ec2-user@ec2-3-120-243-216.eu-central-1.compute.amazonaws.com
     # to active venv: source venv/bin/activate
-    # ETH-USD '{"FTX_US": "ETH/USD", "DYDX": "ETH-USD", "OKX": "ETH-USDT"}'
+    # ETH-USD '{"FTX_US": "ETH/USD", "FTX_GLOBAL": "ETH/USD", "DYDX": "ETH-USD"}'
     if len(sys.argv) < 3:
         raise Exception(
             'Need to enter exchanges dict like so: \'{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}\''

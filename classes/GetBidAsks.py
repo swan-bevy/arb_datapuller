@@ -27,7 +27,12 @@ logging.basicConfig(
 load_dotenv()
 sys.path.append(os.path.abspath("./utils"))
 from utils.jprint import jprint
-from utils.constants import FTX_BASEURL, DYDX_BASEURL, OKX_BASEURL, BUCKET_NAME
+from utils.constants import (
+    FTX_US_BASEURL,
+    FTX_GLOBAL_BASEURL,
+    DYDX_BASEURL,
+    OKX_BASEURL,
+)
 
 
 # =============================================================================
@@ -53,7 +58,7 @@ class GetBidAsks:
     # Determine the exchange and run function
     # =============================================================================
     def get_bid_ask_from_specific_exchange(
-        self, exchange_and_market: tuple, now: dt
+        self, exchange_and_market: tuple, now
     ) -> dict:
         exchange, market = exchange_and_market[0], exchange_and_market[1]
         try:
@@ -76,6 +81,8 @@ class GetBidAsks:
     def determine_exch_n_get_data(self, exchange, market):
         if exchange == "FTX_US":
             res = self.get_bid_ask_ftx_us(market)
+        elif exchange == "FTX_GLOBAL":
+            res = self.get_bid_ask_ftx_global(market)
         elif exchange == "DYDX":
             res = self.get_bid_ask_dydx(market)
         elif exchange == "BINANCE":
@@ -91,7 +98,14 @@ class GetBidAsks:
     # Get bid/ask market data for Ftx_Us
     # =============================================================================
     def get_bid_ask_ftx_us(self, market: str) -> dict:
-        url = f"{FTX_BASEURL}{market}/orderbook"
+        url = f"{FTX_US_BASEURL}{market}/orderbook"
+        return requests.get(url).json()["result"]
+
+    # =============================================================================
+    # Get bid/ask market data for FTX_GLOBAL
+    # =============================================================================
+    def get_bid_ask_ftx_global(self, market: str) -> dict:
+        url = f"{FTX_GLOBAL_BASEURL}{market}/orderbook"
         return requests.get(url).json()["result"]
 
     # =============================================================================
@@ -144,12 +158,11 @@ class GetBidAsks:
         if exchange == "DYDX":
             asks = pd.DataFrame(asks)
             bids = pd.DataFrame(bids)
-        elif exchange in ["FTX_US", "BINANCE"]:
+        elif exchange in ["FTX_US", "FTX_GLOBAL", "BINANCE"]:
             asks = pd.DataFrame(asks, columns=["price", "size"])
             bids = pd.DataFrame(bids, columns=["price", "size"])
-        elif exchange == "OKX":
-            asks = pd.DataFrame(asks, columns=["price", "size"])
-            bids = pd.DataFrame(bids, columns=["price", "size"])
+        else:
+            raise Exception(f"Not implemented for exchange {exchange}")
         asks = self.convert_column_to_numeric(asks)
         bids = self.convert_column_to_numeric(bids)
         return asks, bids
