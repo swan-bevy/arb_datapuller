@@ -44,6 +44,7 @@ class DiscordAlert:
     # =============================================================================
     def determine_exchange_diff(self, bid_asks: list):
         msgs = []
+        jprint("Threshs: ", self.thresholds)
         for pair in self.Caller.diff_pairs:
             if self.check_if_orderbook_is_loose(bid_asks, pair):
                 continue
@@ -54,7 +55,7 @@ class DiscordAlert:
             if cur_thresh["value"] < diff["pct"]:
                 msg = self.format_msg_for_discord(pair, mids, diff)
                 msgs.append(msg)
-                self.increase_and_update_threshold(pair)
+                self.increase_and_update_threshold(pair, diff)
         return msgs
 
     # =============================================================================
@@ -104,9 +105,8 @@ class DiscordAlert:
     # =============================================================================
     # Check current thresh and reset if time is up
     # =============================================================================
-    def increase_and_update_threshold(self, pair):
-        val = self.thresholds[pair]["value"]
-        new_val = dec(val) + dec(self.thresh_incr)
+    def increase_and_update_threshold(self, pair, diff):
+        new_val = dec(diff["pct"]) + dec(self.thresh_incr)
         new_timestamp = determine_cur_utc_timestamp()
         self.thresholds[pair] = {"value": new_val, "timestamp": new_timestamp}
 
