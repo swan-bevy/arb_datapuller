@@ -23,7 +23,7 @@ class DiscordAlert:
             p: deepcopy(self.thresh_base) for p in self.Caller.diff_pairs
         }
         self.thresh_incr = self.ask_for_thresh_incrementer()
-        self.max_bid_ask_spread = 0.2
+        self.max_bid_ask_spread = 0.15
         self.thresh_reset_time = SECS_PER_HOUR
 
     # =============================================================================

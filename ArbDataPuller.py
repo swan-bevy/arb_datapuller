@@ -90,9 +90,8 @@ class ArbDataPuller:
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
-        # if self.today != "2022-11-3000000000":
-        #     self.SaveRawData.save_raw_bid_ask_data_to_s3()
-        #     self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
+        self.SaveRawData.save_raw_bid_ask_data_to_s3()
+        self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
 
     # =============================================================================
@@ -104,7 +103,7 @@ class ArbDataPuller:
         self.FrozenOrderbook.check_all_orderbooks_if_frozen()
         self.Discord.determine_exchange_diff_and_alert_discord(bid_asks)
         print("=========================================\n")
-        # jprint(self.df_obj)
+        jprint(self.df_obj)
 
     # =============================================================================
     # Get current bid ask data from exchange using THREADDING
@@ -215,7 +214,7 @@ class ArbDataPuller:
 if __name__ == "__main__":
     # to activate EC2: ssh -i "ec2-arb-stats.pem" ec2-user@ec2-3-120-243-216.eu-central-1.compute.amazonaws.com
     # to active venv: source venv/bin/activate
-    # ETH-USD '{"FTX_US": "ETH/USD", "FTX_GLOBAL": "ETH/USD", "DYDX": "ETH-USD"}'
+    # ETH-USD '{"FTX_US": "ETH/USD", "FTX_GLOBAL": "ETH/USD", "DYDX": "ETH-USD", "OKX": "ETH-USDT"}'
     if len(sys.argv) < 3:
         raise Exception(
             'Need to enter exchanges dict like so: \'{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}\''

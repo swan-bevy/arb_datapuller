@@ -40,7 +40,6 @@ class FrozenOrderbook:
     # Check if all vals in col are not the same and exit,
     # =============================================================================
     def check_specific_orderbook(self, ex, rows):
-        print(rows)
         bid_p = rows["bid_price"]
         bid_s = rows["bid_size"]
         ask_p = rows["ask_price"]

@@ -3,9 +3,7 @@
 # =============================================================================
 from cmath import pi
 import pandas as pd
-import os, traceback
-import boto3
-import glob
+import traceback
 from io import StringIO
 from pprint import pprint
 from utils.jprint import jprint
@@ -31,8 +29,7 @@ class EodDiff:
             self.reorder_df_columns()
             self.prepare_diff_dfs_for_s3()
             self.save_diff_dfs_to_s3(today)
-            print("Discord alert turned off.")
-            # self.create_n_send_summary_to_discord(today)
+            self.create_n_send_summary_to_discord(today)
         except Exception as e:
             traceback.print_exc()
             print(f"ArbDiff failed execution with error message: {e}")
