@@ -80,8 +80,10 @@ class ArbDataPuller:
         print("MAKE SURE THRESHS ARE APPROPRIATE!")
         self.reset_for_new_day()
         sleep_to_desired_interval(self.interval)
-        while True:
-            if determine_if_new_day(self.midnight):
+        # while True:
+        #     if determine_if_new_day(self.midnight):
+        for x in range(10):
+            if x == 9:
                 self.handle_midnight_event()
             self.get_bid_ask_and_process_df_and_test_diff()
             sleep_to_desired_interval(self.interval)
@@ -214,7 +216,11 @@ class ArbDataPuller:
 if __name__ == "__main__":
     # to activate EC2: ssh -i "ec2-arb-stats.pem" ec2-user@ec2-3-120-243-216.eu-central-1.compute.amazonaws.com
     # to active venv: source venv/bin/activate
+    # BTC-USD '{"FTX_US": "BTC/USD", "FTX_GLOBAL": "BTC/USD", "DYDX": "BTC-USD", "OKX": "BTC-USDT"}'
     # ETH-USD '{"FTX_US": "ETH/USD", "FTX_GLOBAL": "ETH/USD", "DYDX": "ETH-USD", "OKX": "ETH-USDT"}'
+    # SOL-USD '{"FTX_US": "SOL/USD", "FTX_GLOBAL": "SOL/USD", "DYDX": "SOL-USD", "OKX": "SOL-USDT"}'
+    # UNI-USD '{"FTX_US": "UNI/USD", "FTX_GLOBAL": "UNI/USD", "DYDX": "UNI-USD", "OKX": "UNI-USDT"}'
+    # LTC-USD '{"FTX_US": "LTC/USD", "FTX_GLOBAL": "LTC/USD", "DYDX": "LTC-USD", "OKX": "LTC-USDT"}'
     if len(sys.argv) < 3:
         raise Exception(
             'Need to enter exchanges dict like so: \'{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}\''
