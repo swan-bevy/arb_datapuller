@@ -9,38 +9,17 @@ import glob
 from io import StringIO
 from pprint import pprint
 from utils.jprint import jprint
-from dotenv import load_dotenv
 from utils.discord_hook import post_msgs_to_discord
-from utils.constants import BUCKET_NAME, DISCORD_URL
+from utils.constants import BUCKET_NAME, DISCORD_URL, S3
 
-load_dotenv()
-# =============================================================================
-# AWS CONFIG
-# =============================================================================
-AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
-AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
-s3 = boto3.client(
-    "s3",
-    aws_access_key_id=AWS_ACCESS_KEY,
-    aws_secret_access_key=AWS_SECRET_KEY,
-    region_name="eu-central-1",
-)
-
-# =============================================================================
-# ISSUES:
-#   1. The way I determine date for the filepath for S3 is not great
-#   2. I don't like to have to functions for saving to S3, in ArbDataPuller & ArbDiff
-# =============================================================================
 
 # =============================================================================
 # Determine bid/ask differences between exchanges
 # CAUTION: Differentiate between (original) df_obj & (processed) merged_obj!!!
 # =============================================================================
 class EodDiff:
-    def __init__(self, diff_pairs, market, interval):
-        self.diff_pairs = diff_pairs
-        self.market = market
-        self.interval = interval
+    def __init__(self, Caller):
+        self.Caller = Caller
 
     # =============================================================================
     # Compute diffs between exchanges, save to S3 and send summary to Discord
@@ -52,7 +31,8 @@ class EodDiff:
             self.reorder_df_columns()
             self.prepare_diff_dfs_for_s3()
             self.save_diff_dfs_to_s3(today)
-            self.create_n_send_summary_to_discord(today)
+            print("Discord alert turned off.")
+            # self.create_n_send_summary_to_discord(today)
         except Exception as e:
             traceback.print_exc()
             print(f"ArbDiff failed execution with error message: {e}")
@@ -62,7 +42,7 @@ class EodDiff:
     # =============================================================================
     def merge_dfs_for_pairs(self, df_obj):
         merged_obj = {}
-        for pair in self.diff_pairs:
+        for pair in self.Caller.diff_pairs:
             ex0, ex1 = pair.split("-")
             df0, df1 = df_obj[ex0], df_obj[ex1]
             df0 = self.rename_columns(ex0, df0)
@@ -129,12 +109,12 @@ class EodDiff:
     # Format timestamps and such
     # =============================================================================
     def save_diff_dfs_to_s3(self, today):
-        base = f"Difference/{self.market}/{today}"
+        base = f"Difference/{self.Caller.market}/{today}"
         for ex_pair, df in self.merged_obj.items():
-            path = f"{base}/{ex_pair}_{self.market}_{today}.csv"
+            path = f"{base}/{ex_pair}_{self.Caller.market}_{today}.csv"
             csv_buffer = StringIO()
             df.to_csv(csv_buffer)
-            response = s3.put_object(
+            response = S3.put_object(
                 Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
             )
             print(
@@ -177,7 +157,7 @@ class EodDiff:
     def format_msg_for_discord(self, info):
         ex0, ex1 = info["pair"].split("-")
 
-        msg1 = f"{ex0} & {ex1} trading {self.market} at interval {self.interval} seconds:\n"
+        msg1 = f"{ex0} & {ex1} trading {self.Caller.market} at interval {self.Caller.interval} seconds:\n"
 
         msg2 = f" - Max diff absolute: ${info['max_abs']}\n"
         msg3 = f" - Max diff percentage: {info['max_perc']}%\n"

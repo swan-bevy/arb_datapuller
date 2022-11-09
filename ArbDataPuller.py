@@ -4,12 +4,8 @@
 import os, sys, json
 import boto3
 from io import StringIO
-import datetime as dt
 from dotenv import load_dotenv
-import requests
-import dydx3
 import pandas as pd
-import numpy as np
 import concurrent.futures
 from itertools import repeat
 
@@ -31,6 +27,8 @@ from utils.constants import BUCKET_NAME
 from classes.GetBidAsks import GetBidAsks
 from classes.DiscordAlert import DiscordAlert
 from classes.EodDiff import EodDiff
+from classes.SaveRawData import SaveRawData
+from classes.FrozenOrderbook import FrozenOrderbook
 
 # =============================================================================
 # AWS CONFIG
@@ -70,8 +68,10 @@ class ArbDataPuller:
         self.s3 = s3
 
         self.GetBidAsks = GetBidAsks()
-        self.Discord = DiscordAlert(self.diff_pairs, self.market, self.interval)
-        self.EodDiff = EodDiff(self.diff_pairs, self.market, self.interval)
+        self.FrozenOrderbook = FrozenOrderbook(self)
+        self.Discord = DiscordAlert(self)
+        self.SaveRawData = SaveRawData(self)
+        self.EodDiff = EodDiff(self)
 
     # =============================================================================
     # Get market data for exchanges, iterate infinitely
@@ -90,9 +90,9 @@ class ArbDataPuller:
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
-        if self.today != "2022-11-08":
-            self.save_raw_bid_ask_data_to_s3()
-            self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
+        # if self.today != "2022-11-3000000000":
+        #     self.SaveRawData.save_raw_bid_ask_data_to_s3()
+        #     self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
 
     # =============================================================================
@@ -101,9 +101,10 @@ class ArbDataPuller:
     def get_bid_ask_and_process_df_and_test_diff(self) -> dict:
         bid_asks = self.get_bid_ask_from_exchanges()
         self.update_df_obj_with_new_bid_ask_data(bid_asks)
+        self.FrozenOrderbook.check_all_orderbooks_if_frozen()
         self.Discord.determine_exchange_diff_and_alert_discord(bid_asks)
         print("=========================================\n")
-        jprint(self.df_obj)
+        # jprint(self.df_obj)
 
     # =============================================================================
     # Get current bid ask data from exchange using THREADDING
@@ -147,37 +148,6 @@ class ArbDataPuller:
         return pd.concat([df, pd.DataFrame([bid_ask])], ignore_index=True)
 
     # =============================================================================
-    # Save the updated df to S3
-    # =============================================================================
-    def save_raw_bid_ask_data_to_s3(self) -> None:
-        for exchange, df in self.df_obj.items():
-            df = self.prepare_df_for_s3(df)
-            path = self.update_cur_s3_filepath(self.S3_BASE_PATHS[exchange])
-            csv_buffer = StringIO()
-            df.to_csv(csv_buffer)
-            response = s3.put_object(
-                Bucket=BUCKET_NAME, Key=path, Body=csv_buffer.getvalue()
-            )
-            print(
-                f"{path} saved with status code: {response['ResponseMetadata']['HTTPStatusCode']}"
-            )
-
-    # =============================================================================
-    # Preare the final df_obj to be save to S3
-    # =============================================================================
-    def prepare_df_for_s3(self, df) -> dict:
-        df = df.set_index("timestamp")
-        df.index = pd.to_datetime(df.index).tz_localize(None)
-        df = df[["bid_price", "ask_price", "bid_size", "ask_size", "mid"]]
-        return df
-
-    # =============================================================================
-    # Create filesnames for today's date (date in filename!)
-    # =============================================================================
-    def update_cur_s3_filepath(self, base_path: str):
-        return f"{base_path}-{self.today}.csv"
-
-    # =============================================================================
     #
     # HELPERS
     #
@@ -205,12 +175,6 @@ class ArbDataPuller:
                 msg = f"Naming convention: Rename exchange. {ex} cannot contain a - (hyphon) in its name."
                 raise Exception(msg)
         return exchanges
-
-    # =============================================================================
-    # Ask user for universalized market notation (since it deviates from exchange to exchange)
-    # =============================================================================
-    def ask_user_for_market(self):
-        pass
 
     # =============================================================================
     # Get all relevant filepaths to fetch and save data to

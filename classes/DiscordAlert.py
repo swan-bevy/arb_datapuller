@@ -15,13 +15,13 @@ from copy import deepcopy
 # This class check bid_ask data for exchange arbitrage opportunities and send to Discord
 # =============================================================================
 class DiscordAlert:
-    def __init__(self, diff_pairs, market, interval):
-        self.diff_pairs = diff_pairs
-        self.market = market
-        self.interval = interval
+    def __init__(self, Caller):
+        self.Caller = Caller
 
         self.thresh_base = self.generate_thresh_base_dict()
-        self.thresholds = {p: deepcopy(self.thresh_base) for p in diff_pairs}
+        self.thresholds = {
+            p: deepcopy(self.thresh_base) for p in self.Caller.diff_pairs
+        }
         self.thresh_incr = self.ask_for_thresh_incrementer()
         self.max_bid_ask_spread = 0.2
         self.thresh_reset_time = SECS_PER_HOUR
@@ -44,8 +44,7 @@ class DiscordAlert:
     # =============================================================================
     def determine_exchange_diff(self, bid_asks: list):
         msgs = []
-        jprint("Thresh: ", self.thresholds)
-        for pair in self.diff_pairs:
+        for pair in self.Caller.diff_pairs:
             if self.check_if_orderbook_is_loose(bid_asks, pair):
                 continue
             mids = self.extract_mid_prices(bid_asks, pair)
@@ -118,7 +117,7 @@ class DiscordAlert:
         ex0, ex1 = pair.split("-")
         thresh_val = round(self.thresholds[pair]["value"], 2)
         msg0 = f"ALERT: Arbitrage opportunity.\n"
-        msg1 = f"{ex0} & {ex1} trading {self.market} at interval {self.interval} seconds:\n"
+        msg1 = f"{ex0} & {ex1} trading {self.Caller.market} at interval {self.Caller.interval} seconds:\n"
         msg2 = f"Diff surpassed % threshold of: {thresh_val}%\n"
         msg3 = f"Percentage price difference: {diff['pct']}%\n"
         msg4 = f"Absolute price difference: ${diff['abs']}\n"
