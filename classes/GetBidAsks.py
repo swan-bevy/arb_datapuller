@@ -6,7 +6,6 @@ import datetime as dt
 from dotenv import load_dotenv
 import requests
 import dydx3
-from binance.spot import Spot as BinanceSpot
 import pandas as pd
 import numpy as np
 import traceback
@@ -32,6 +31,7 @@ from utils.constants import (
     FTX_GLOBAL_BASEURL,
     DYDX_BASEURL,
     OKX_BASEURL,
+    BINANCE_US_BASEURL,
 )
 
 
@@ -52,7 +52,6 @@ from utils.constants import (
 class GetBidAsks:
     def __init__(self):
         self.dydx_client = dydx3.Client(host=DYDX_BASEURL)
-        self.binance_client = BinanceSpot()
 
     # =============================================================================
     # Determine the exchange and run function
@@ -85,8 +84,8 @@ class GetBidAsks:
             res = self.get_bid_ask_ftx_global(market)
         elif exchange == "DYDX":
             res = self.get_bid_ask_dydx(market)
-        elif exchange == "BINANCE":
-            res = self.get_bid_ask_binance(market)
+        elif exchange == "BINANCE_US":
+            res = self.get_bid_ask_binance_us(market)
         elif exchange == "OKX":
             res = self.get_bid_ask_okx(market)
         else:
@@ -115,12 +114,6 @@ class GetBidAsks:
         return self.dydx_client.public.get_orderbook(market=market).data
 
     # =============================================================================
-    # Get bid/ask market data for Binance
-    # =============================================================================
-    def get_bid_ask_binance(self, market: str) -> dict:
-        return self.binance_client.depth(symbol=market)
-
-    # =============================================================================
     # Get bid/ask market data for OkX
     # =============================================================================
     def get_bid_ask_okx(self, market: str) -> dict:
@@ -132,6 +125,13 @@ class GetBidAsks:
         res["asks"] = [r[0:2] for r in res["asks"]]
         res["bids"] = [r[0:2] for r in res["bids"]]
         return res
+
+    # =============================================================================
+    # Pull best bid/ask for Binance US
+    # =============================================================================
+    def get_bid_ask_binance_us(self, market):
+        res = requests.get(BINANCE_US_BASEURL + f"symbol={market}")
+        return res.json()
 
     # =============================================================================
     # Pull best bid/ask for DyDx, verify it's sorted correctly
@@ -155,10 +155,10 @@ class GetBidAsks:
     # =============================================================================
     def convert_orderbook_to_df(self, res, exchange):
         asks, bids = res["asks"], res["bids"]
-        if exchange == "DYDX":
+        if exchange in ["DYDX"]:
             asks = pd.DataFrame(asks)
             bids = pd.DataFrame(bids)
-        elif exchange in ["FTX_US", "FTX_GLOBAL", "BINANCE", "OKX"]:
+        elif exchange in ["FTX_US", "FTX_GLOBAL", "BINANCE_US", "OKX"]:
             asks = pd.DataFrame(asks, columns=["price", "size"])
             bids = pd.DataFrame(bids, columns=["price", "size"])
         else:

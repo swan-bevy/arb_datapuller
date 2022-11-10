@@ -214,11 +214,11 @@ class ArbDataPuller:
 if __name__ == "__main__":
     # to activate EC2: ssh -i "ec2-arb-stats.pem" ec2-user@ec2-3-120-243-216.eu-central-1.compute.amazonaws.com
     # to active venv: source venv/bin/activate
-    # BTC-USD '{"FTX_US": "BTC/USD", "FTX_GLOBAL": "BTC/USD", "DYDX": "BTC-USD", "OKX": "BTC-USDT"}'
-    # ETH-USD '{"FTX_US": "ETH/USD", "FTX_GLOBAL": "ETH/USD", "DYDX": "ETH-USD", "OKX": "ETH-USDT"}'
-    # SOL-USD '{"FTX_US": "SOL/USD", "FTX_GLOBAL": "SOL/USD", "DYDX": "SOL-USD", "OKX": "SOL-USDT"}'
-    # UNI-USD '{"FTX_US": "UNI/USD", "FTX_GLOBAL": "UNI/USD", "DYDX": "UNI-USD", "OKX": "UNI-USDT"}'
-    # LTC-USD '{"FTX_US": "LTC/USD", "FTX_GLOBAL": "LTC/USD", "DYDX": "LTC-USD", "OKX": "LTC-USDT"}'
+    # BTC-USD '{"DYDX": "BTC-USD", "OKX": "BTC-USDT", "BINANCE_US": "BTC-USD"}'
+    # ETH-USD '{"DYDX": "ETH-USD", "OKX": "ETH-USDT", "BINANCE_US": "ETH-USD"}'
+    # SOL-USD '{"DYDX": "SOL-USD", "OKX": "SOL-USDT", "BINANCE_US": "SOL-USD"}'
+    # UNI-USD '{"DYDX": "UNI-USD", "OKX": "UNI-USDT", "BINANCE_US": "UNI-USD"}'
+    # LTC-USD '{"DYDX": "LTC-USD", "OKX": "LTC-USDT", "BINANCE_US": "LTC-USD"}'
     if len(sys.argv) < 3:
         raise Exception(
             'Need to enter exchanges dict like so: \'{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}\''
