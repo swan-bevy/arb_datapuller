@@ -32,6 +32,7 @@ from utils.constants import (
     DYDX_BASEURL,
     OKX_BASEURL,
     BINANCE_US_BASEURL,
+    COINBASE_BASEURL,
 )
 
 
@@ -88,6 +89,9 @@ class GetBidAsks:
             res = self.get_bid_ask_binance_us(market)
         elif exchange == "OKX":
             res = self.get_bid_ask_okx(market)
+        elif exchange == "COINBASE":
+            res = self.get_bid_ask_coinbase(market)
+
         else:
             raise Exception("No function exists for this exchange.")
         bid_ask = self.process_orderbook_res_from_ex(res, exchange)
@@ -127,11 +131,20 @@ class GetBidAsks:
         return res
 
     # =============================================================================
-    # Pull best bid/ask for Binance US
+    # Pull best bid/ask from Binance US
     # =============================================================================
     def get_bid_ask_binance_us(self, market):
         res = requests.get(BINANCE_US_BASEURL + f"symbol={market}")
         return res.json()
+
+    # =============================================================================
+    # Pull best bid/ask from CoinBase
+    # =============================================================================
+    def get_bid_ask_coinbase(self, market):
+        url = f"{COINBASE_BASEURL}{market}/book?level=1"
+        res = requests.get(url, headers={"accept": "application/json"}).json()
+        print("Make sure Coinbase is alright!")
+        return {"bids": [res["bids"][0][0:2]], "asks": [res["asks"][0][0:2]]}
 
     # =============================================================================
     # Pull best bid/ask for DyDx, verify it's sorted correctly
@@ -158,7 +171,7 @@ class GetBidAsks:
         if exchange in ["DYDX"]:
             asks = pd.DataFrame(asks)
             bids = pd.DataFrame(bids)
-        elif exchange in ["FTX_US", "FTX_GLOBAL", "BINANCE_US", "OKX"]:
+        elif exchange in ["FTX_US", "FTX_GLOBAL", "BINANCE_US", "OKX", "COINBASE"]:
             asks = pd.DataFrame(asks, columns=["price", "size"])
             bids = pd.DataFrame(bids, columns=["price", "size"])
         else:

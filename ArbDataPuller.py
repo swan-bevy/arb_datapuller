@@ -188,7 +188,7 @@ class ArbDataPuller:
     # =============================================================================
     # Reset all values that start a new with new day
     # =============================================================================
-    def reset_for_new_day(self) -> tuple:
+    def reset_for_new_day(self):
         self.today = determine_today_str_timestamp()
         self.midnight = determine_next_midnight()
         self.df_obj = {}
@@ -214,11 +214,11 @@ class ArbDataPuller:
 if __name__ == "__main__":
     # to activate EC2: ssh -i "ec2-arb-stats.pem" ec2-user@ec2-3-120-243-216.eu-central-1.compute.amazonaws.com
     # to active venv: source venv/bin/activate
-    # BTC-USD '{"DYDX": "BTC-USD", "OKX": "BTC-USDT", "BINANCE_US": "BTC-USD"}'
-    # ETH-USD '{"DYDX": "ETH-USD", "OKX": "ETH-USDT", "BINANCE_US": "ETH-USD"}'
-    # SOL-USD '{"DYDX": "SOL-USD", "OKX": "SOL-USDT", "BINANCE_US": "SOL-USD"}'
-    # UNI-USD '{"DYDX": "UNI-USD", "OKX": "UNI-USDT", "BINANCE_US": "UNI-USD"}'
-    # LTC-USD '{"DYDX": "LTC-USD", "OKX": "LTC-USDT", "BINANCE_US": "LTC-USD"}'
+    # BTC-USD '{"DYDX": "BTC-USD", "OKX": "BTC-USDT", "BINANCE_US": "BTCUSD"}'
+    # ETH-USD '{"DYDX": "ETH-USD", "OKX": "ETH-USDT"}'
+    # SOL-USD '{"DYDX": "SOL-USD", "OKX": "SOL-USDT"}'
+    # UNI-USD '{"DYDX": "UNI-USD", "OKX": "UNI-USDT"}'
+    # LTC-USD '{"DYDX": "LTC-USD", "OKX": "LTC-USDT"}'
     if len(sys.argv) < 3:
         raise Exception(
             'Need to enter exchanges dict like so: \'{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}\''
