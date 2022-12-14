@@ -147,7 +147,6 @@ class GetBidAsks:
         res = requests.get(
             BINANCE_GLOBAL_BASEURL + f"symbol={market}" + "&" + f"limit=10"
         )
-        jprint(res.json())
         return res.json()
 
     # =============================================================================
