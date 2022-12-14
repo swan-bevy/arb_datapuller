@@ -32,6 +32,7 @@ from utils.constants import (
     DYDX_BASEURL,
     OKX_BASEURL,
     BINANCE_US_BASEURL,
+    BINANCE_GLOBAL_BASEURL,
     COINBASE_BASEURL,
 )
 
@@ -87,6 +88,8 @@ class GetBidAsks:
             res = self.get_bid_ask_dydx(market)
         elif exchange == "BINANCE_US":
             res = self.get_bid_ask_binance_us(market)
+        elif exchange == "BINANCE_GLOBAL":
+            res = self.get_bid_ask_binance_global(market)
         elif exchange == "OKX":
             res = self.get_bid_ask_okx(market)
         elif exchange == "COINBASE":
@@ -138,6 +141,16 @@ class GetBidAsks:
         return res.json()
 
     # =============================================================================
+    # Pull best bid/ask from Binance Global
+    # =============================================================================
+    def get_bid_ask_binance_global(self, market):
+        res = requests.get(
+            BINANCE_GLOBAL_BASEURL + f"symbol={market}" + "&" + f"limit=10"
+        )
+        jprint(res.json())
+        return res.json()
+
+    # =============================================================================
     # Pull best bid/ask from CoinBase
     # =============================================================================
     def get_bid_ask_coinbase(self, market):
@@ -171,7 +184,14 @@ class GetBidAsks:
         if exchange in ["DYDX"]:
             asks = pd.DataFrame(asks)
             bids = pd.DataFrame(bids)
-        elif exchange in ["FTX_US", "FTX_GLOBAL", "BINANCE_US", "OKX", "COINBASE"]:
+        elif exchange in [
+            "FTX_US",
+            "FTX_GLOBAL",
+            "BINANCE_US",
+            "BINANCE_GLOBAL",
+            "OKX",
+            "COINBASE",
+        ]:
             asks = pd.DataFrame(asks, columns=["price", "size"])
             bids = pd.DataFrame(bids, columns=["price", "size"])
         else:

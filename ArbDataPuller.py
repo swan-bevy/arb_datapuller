@@ -90,8 +90,9 @@ class ArbDataPuller:
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
-        self.SaveRawData.save_raw_bid_ask_data_to_s3()
-        self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
+        if self.today != "2022-12-14":
+            self.SaveRawData.save_raw_bid_ask_data_to_s3()
+            self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
 
     # =============================================================================
@@ -214,11 +215,8 @@ class ArbDataPuller:
 if __name__ == "__main__":
     # to activate EC2: ssh -i "ec2-arb-stats.pem" ec2-user@ec2-3-120-243-216.eu-central-1.compute.amazonaws.com
     # to active venv: source venv/bin/activate
-    # BTC-USD '{"DYDX": "BTC-USD", "OKX": "BTC-USDT", "BINANCE_US": "BTCUSD"}'
-    # ETH-USD '{"DYDX": "ETH-USD", "OKX": "ETH-USDT"}'
-    # SOL-USD '{"DYDX": "SOL-USD", "OKX": "SOL-USDT"}'
-    # UNI-USD '{"DYDX": "UNI-USD", "OKX": "UNI-USDT"}'
-    # LTC-USD '{"DYDX": "LTC-USD", "OKX": "LTC-USDT"}'
+    # BTC-USD '{"DYDX": "BTC-USD", "BINANCE_GLOBAL": "BTCBUSD"}'
+    # ETH-USD '{"DYDX": "ETH-USD", "BINANCE_GLOBAL": "ETHBUSD"}'
     if len(sys.argv) < 3:
         raise Exception(
             'Need to enter exchanges dict like so: \'{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}\''
