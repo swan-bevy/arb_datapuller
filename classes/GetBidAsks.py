@@ -2,15 +2,12 @@
 # IMPORTS
 # =============================================================================
 import os, sys, time
-import datetime as dt
 from dotenv import load_dotenv
 import requests
 import dydx3
 import pandas as pd
 import numpy as np
 import traceback
-
-from sympy import E
 
 # =============================================================================
 # FILE IMPORTS

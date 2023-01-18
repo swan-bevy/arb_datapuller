@@ -7,8 +7,6 @@ from dotenv import load_dotenv
 import pandas as pd
 import concurrent.futures
 from itertools import repeat
-import requests
-import traceback
 
 # =============================================================================
 # FILE IMPORTS
@@ -91,7 +89,15 @@ class ArbDataPuller:
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
-        if self.today != "2023-01-18" and self.today != "2023-01-19":
+        if self.today not in [
+            "2023-01-18",
+            "2023-01-19",
+            "2023-01-20",
+            "2023-01-21",
+            "2023-01-22",
+            "2023-01-23",
+            "2023-01-24",
+        ]:
             self.SaveRawData.save_raw_bid_ask_data_to_s3()
             self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
