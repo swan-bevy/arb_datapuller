@@ -91,7 +91,7 @@ class ArbDataPuller:
     # It's midnight! Save important data and reset for next day
     # =============================================================================
     def handle_midnight_event(self):
-        if self.today != "2022-12-14":
+        if self.today != "2023-01-18" and self.today != "2023-01-19":
             self.SaveRawData.save_raw_bid_ask_data_to_s3()
             self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
         self.reset_for_new_day()  # must come last!
@@ -193,7 +193,6 @@ class ArbDataPuller:
     def reset_for_new_day(self):
         self.today = determine_today_str_timestamp()
         self.midnight = determine_next_midnight()
-        print(self.ticksizes)
         self.df_obj = {}
 
     # =============================================================================
@@ -212,29 +211,6 @@ class ArbDataPuller:
         if "-" not in market or not market.isupper():
             raise ValueError("Invalid market format. Should be like so: `BTC-USD`.")
         return market
-
-    # =============================================================================
-    # Get tick size from dydx to check for lose orderbook
-    # =============================================================================
-    def get_ticksize_from_dydx(self):
-        token = self.exchanges_obj["DYDX"]
-        res = requests.get(f"{DYDX_BASEURL}/markets")
-        res = res.json()["markets"][token]
-        return float(res["tickSize"])
-
-    # =============================================================================
-    # GET INFO FOR A SPECIFIC TOKEN
-    # =============================================================================
-    def get_ticksize_from_binance(self):
-        token = self.exchanges_obj["BINANCE_GLOBAL"]
-        res = requests.get(f"{BINANCE_GLOBAL_BASEURL}/exchangeInfo").json()
-        info = res["symbols"]
-        for symbol in info:
-            if symbol["symbol"] == token:
-                for filt in symbol["filters"]:
-                    if filt["filterType"] == "PRICE_FILTER":
-                        tick_size = float(filt["tickSize"])
-        return tick_size
 
 
 if __name__ == "__main__":

@@ -71,9 +71,7 @@ class GetBidAsks:
                 res = self.determine_exch_n_get_data(exchange, market)
                 return self.process_n_error_check_res(res, exchange)
             except Exception as e:
-                log.error(
-                    f"Exception occurred with {market} at {exchange}", exc_info=True
-                )
+                log.exception(e)
                 self.print_exception(exchange, e)
                 if count >= self.MAX_RETRIES:
                     return self.create_nan_bid_ask_dict()
@@ -101,7 +99,8 @@ class GetBidAsks:
     # Get bid/ask market data for DyDx
     # =============================================================================
     def get_bid_ask_dydx(self, market: str) -> dict:
-        return requests.get(f"{DYDX_BASEURL}/orderbook/{market}")
+        res = requests.get(f"{DYDX_BASEURL}/orderbook/{market}")
+        return res.json()
 
     # =============================================================================
     # Get bid/ask market data for OkX
