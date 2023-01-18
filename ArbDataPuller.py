@@ -1,14 +1,14 @@
 # =============================================================================
 # IMPORTS
 # =============================================================================
-import os, sys, json
+import os, sys, json, time
 import boto3
-from io import StringIO
 from dotenv import load_dotenv
 import pandas as pd
 import concurrent.futures
 from itertools import repeat
-
+import requests
+import traceback
 
 # =============================================================================
 # FILE IMPORTS
@@ -23,7 +23,7 @@ from utils.time_helpers import (
     determine_if_new_day,
     sleep_to_desired_interval,
 )
-from utils.constants import BUCKET_NAME
+from utils.constants import DYDX_BASEURL, BINANCE_GLOBAL_BASEURL
 from classes.GetBidAsks import GetBidAsks
 from classes.DiscordAlert import DiscordAlert
 from classes.EodDiff import EodDiff
@@ -31,7 +31,7 @@ from classes.SaveRawData import SaveRawData
 from classes.FrozenOrderbook import FrozenOrderbook
 
 # =============================================================================
-# AWS CONFIG
+# CONFIG
 # =============================================================================
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
@@ -41,6 +41,7 @@ s3 = boto3.client(
     aws_secret_access_key=AWS_SECRET_KEY,
     region_name="eu-central-1",
 )
+
 
 # =============================================================================
 # ISSUES
@@ -67,7 +68,7 @@ class ArbDataPuller:
         self.S3_BASE_PATHS = self.determine_general_s3_filepaths()
         self.s3 = s3
 
-        self.GetBidAsks = GetBidAsks()
+        self.GetBidAsks = GetBidAsks(self)
         self.FrozenOrderbook = FrozenOrderbook(self)
         self.Discord = DiscordAlert(self)
         self.SaveRawData = SaveRawData(self)
@@ -192,6 +193,7 @@ class ArbDataPuller:
     def reset_for_new_day(self):
         self.today = determine_today_str_timestamp()
         self.midnight = determine_next_midnight()
+        print(self.ticksizes)
         self.df_obj = {}
 
     # =============================================================================
@@ -210,6 +212,29 @@ class ArbDataPuller:
         if "-" not in market or not market.isupper():
             raise ValueError("Invalid market format. Should be like so: `BTC-USD`.")
         return market
+
+    # =============================================================================
+    # Get tick size from dydx to check for lose orderbook
+    # =============================================================================
+    def get_ticksize_from_dydx(self):
+        token = self.exchanges_obj["DYDX"]
+        res = requests.get(f"{DYDX_BASEURL}/markets")
+        res = res.json()["markets"][token]
+        return float(res["tickSize"])
+
+    # =============================================================================
+    # GET INFO FOR A SPECIFIC TOKEN
+    # =============================================================================
+    def get_ticksize_from_binance(self):
+        token = self.exchanges_obj["BINANCE_GLOBAL"]
+        res = requests.get(f"{BINANCE_GLOBAL_BASEURL}/exchangeInfo").json()
+        info = res["symbols"]
+        for symbol in info:
+            if symbol["symbol"] == token:
+                for filt in symbol["filters"]:
+                    if filt["filterType"] == "PRICE_FILTER":
+                        tick_size = float(filt["tickSize"])
+        return tick_size
 
 
 if __name__ == "__main__":
