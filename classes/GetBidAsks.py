@@ -4,7 +4,6 @@
 import os, sys, time
 from dotenv import load_dotenv
 import requests
-import dydx3
 import pandas as pd
 import numpy as np
 import traceback
@@ -46,7 +45,6 @@ class GetBidAsks:
 
     def __init__(self, Caller):
         self.Caller = Caller
-        self.dydx_client = dydx3.Client(host=DYDX_BASEURL)
 
     # =============================================================================
     # Determine the exchange and run function
