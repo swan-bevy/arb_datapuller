@@ -134,3 +134,4 @@ dmypy.json
 # Custom
 diff_data/
 s3_diff_data/
+logs/

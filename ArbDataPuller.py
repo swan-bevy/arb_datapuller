@@ -1,7 +1,7 @@
 # =============================================================================
 # IMPORTS
 # =============================================================================
-import os, sys, json, time
+import os, sys, json, requests, traceback
 import boto3
 from dotenv import load_dotenv
 import pandas as pd
@@ -21,12 +21,12 @@ from utils.time_helpers import (
     determine_if_new_day,
     sleep_to_desired_interval,
 )
-from utils.constants import DYDX_BASEURL, BINANCE_GLOBAL_BASEURL
 from classes.GetBidAsks import GetBidAsks
 from classes.DiscordAlert import DiscordAlert
 from classes.EodDiff import EodDiff
 from classes.SaveRawData import SaveRawData
 from classes.FrozenOrderbook import FrozenOrderbook
+from utils.discord_hook import ping_private_discord
 
 # =============================================================================
 # CONFIG
@@ -42,18 +42,7 @@ s3 = boto3.client(
 
 
 # =============================================================================
-# ISSUES
-#   1. Should I use the same timestamp variable for both exchanges, or should
-#      I determine a new timestamp variable for every exchange? Probably the same
-#      to allow easy merging of dfs later
-#   2. I use floats not decimals for mid calculation. Should be fine tho
-#   3. Verify if df appending/concatening is correct
-#   4. Error checker exception isn't thrown, since it's in try/catch
-# =============================================================================
-
-
-# =============================================================================
-# Pull bid/ask from exchanges, save to S3 at midnight
+# CLASS
 # =============================================================================
 class ArbDataPuller:
     def __init__(self, market: str, exchanges_obj: dict):
@@ -90,13 +79,10 @@ class ArbDataPuller:
     # =============================================================================
     def handle_midnight_event(self):
         if self.today not in [
-            "2023-01-18",
-            "2023-01-19",
-            "2023-01-20",
-            "2023-01-21",
-            "2023-01-22",
             "2023-01-23",
             "2023-01-24",
+            "2023-01-25",
+            "2023-01-26",
         ]:
             self.SaveRawData.save_raw_bid_ask_data_to_s3()
             self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
@@ -231,4 +217,8 @@ if __name__ == "__main__":
     market = sys.argv[1]
     exchanges_obj = json.loads(sys.argv[2])
     obj = ArbDataPuller(market=market, exchanges_obj=exchanges_obj)
-    obj.main()
+    try:
+        ping_private_discord(f"Initiating arb-tracker for {market} on {exchanges_obj}")
+        obj.main()
+    finally:
+        ping_private_discord("ALARM: ARB_DATAPULLER EXECUTION WAS STOPPED")

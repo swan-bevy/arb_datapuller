@@ -22,6 +22,7 @@ from utils.constants import (
     COINBASE_BASEURL,
 )
 from utils.logger import get_logger
+from utils.discord_hook import ping_private_discord
 
 log = get_logger()
 
@@ -66,12 +67,14 @@ class GetBidAsks:
                 res = self.determine_exch_n_get_data(exchange, market)
                 return self.process_n_error_check_res(res, exchange)
             except Exception as e:
+                ping_private_discord(e)
                 log.exception(e)
                 self.print_exception(exchange, e)
                 if count >= self.MAX_RETRIES:
                     return self.create_nan_bid_ask_dict()
                 count += 1
                 time.sleep(0.1)
+        return self.create_nan_bid_ask_dict()
 
     # =============================================================================
     # Determine which exchange, and fetch data
