@@ -212,7 +212,7 @@ if __name__ == "__main__":
     # ETH-USD '{"DYDX": "ETH-USD", "BINANCE_GLOBAL": "ETHBUSD"}'
     if len(sys.argv) < 3:
         raise Exception(
-            'Need to enter exchanges dict like so: \'{"FTX_US": "BTC/USD", "DYDX": "BTC-USD"}\''
+            'Need to enter exchanges dict like so: \'{"BINANCE_GLOBAL": "BTC/USD", "DYDX": "BTC-USD"}\''
         )
     market = sys.argv[1]
     exchanges_obj = json.loads(sys.argv[2])

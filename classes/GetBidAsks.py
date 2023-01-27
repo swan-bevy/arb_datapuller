@@ -43,6 +43,7 @@ log = get_logger()
 # =============================================================================
 class GetBidAsks:
     MAX_RETRIES = 5  # max amount of time to retry fetching from the exchange
+    MAX_BID_ASK_DIFF = 0.09
 
     def __init__(self, Caller):
         self.Caller = Caller
@@ -199,7 +200,7 @@ class GetBidAsks:
             raise Exception(f"{exchange} orderbook messed up: \n {bids}")
 
         diff = self.determine_bid_ask_diff(bid_ask)
-        if diff >= 0.09:
+        if diff >= self.MAX_BID_ASK_DIFF:
             raise Exception(f"{exchange} orderbook is lose: {bid_ask}")
 
     # =============================================================================
