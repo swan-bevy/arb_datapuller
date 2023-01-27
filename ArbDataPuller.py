@@ -79,10 +79,9 @@ class ArbDataPuller:
     # =============================================================================
     def handle_midnight_event(self):
         if self.today not in [
-            "2023-01-23",
-            "2023-01-24",
-            "2023-01-25",
-            "2023-01-26",
+            "2023-01-27",
+            "2023-01-28",
+            "2023-01-29",
         ]:
             self.SaveRawData.save_raw_bid_ask_data_to_s3()
             self.EodDiff.determine_eod_diff_n_create_summary(self.df_obj, self.today)
