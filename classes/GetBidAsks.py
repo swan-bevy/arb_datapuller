@@ -163,8 +163,6 @@ class GetBidAsks:
             asks = pd.DataFrame(asks)
             bids = pd.DataFrame(bids)
         elif exchange in [
-            "FTX_US",
-            "FTX_GLOBAL",
             "BINANCE_US",
             "BINANCE_GLOBAL",
             "OKX",
