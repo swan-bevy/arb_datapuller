@@ -1,7 +1,7 @@
 # =============================================================================
 # IMPORTS
 # =============================================================================
-import os, sys, json, requests, traceback
+import os, sys, json
 import boto3
 from dotenv import load_dotenv
 import pandas as pd
